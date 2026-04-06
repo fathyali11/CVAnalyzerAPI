@@ -1,6 +1,7 @@
 using System.Text;
 using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.Data;
+using CVAnalyzerAPI.Services.TokenServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -41,6 +42,9 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings?.SecretKey ?? string.Empty))
     };
 });
+
+
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 var app = builder.Build();
 

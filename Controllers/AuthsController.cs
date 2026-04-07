@@ -12,7 +12,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
 {
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody]RegisterRequest request, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken = default)
     {
         var result = await _authService.RegisterAsync(request, cancellationToken);
         return result.Match<IActionResult>(
@@ -24,6 +24,20 @@ public class AuthsController(IAuthService _authService) : ControllerBase
                 _ => StatusCode(500, "An unexpected error occurred")
             }
 
+        );
+    }
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await _authService.LoginAsync(request, cancellationToken);
+        return result.Match<IActionResult>(
+            authResponse => Ok(authResponse),
+            error => error.Code switch
+            {
+                ErrorCodes.BadRequest => BadRequest(error.Message),
+                ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, error.Message),
+                _ => StatusCode(500, "An unexpected error occurred")
+            }
         );
     }
 }

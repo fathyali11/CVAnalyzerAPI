@@ -7,4 +7,5 @@ namespace CVAnalyzerAPI.Services.AuthServices;
 public interface IAuthService
 {
     Task<OneOf<AuthResponse, Error>> RegisterAsync(RegisterRequest request,CancellationToken cancellationToken=default);
+    Task<OneOf<AuthResponse, Error>> LoginAsync(LoginRequest request,CancellationToken cancellationToken=default);
 }

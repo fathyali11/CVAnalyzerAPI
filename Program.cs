@@ -1,12 +1,19 @@
 using System.Text;
 using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.Data;
+using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using CVAnalyzerAPI.Middlewares;
+using CVAnalyzerAPI.Services.AuthServices;
 using CVAnalyzerAPI.Services.TokenServices;
+using CVAnalyzerAPI.Validators.AuthValidators;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
+
+using Microsoft.AspNetCore.Identity;
+using CVAnalyzerAPI.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +32,11 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddIdentityCore<ApplicationUser>()
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
 
 builder.Services.AddOptions<JwtSettings>()
     .Bind(builder.Configuration.GetSection(nameof(JwtSettings)))
@@ -54,6 +66,8 @@ builder.Services.AddAuthentication(options =>
 
 
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator>();
 
 var app = builder.Build();
 

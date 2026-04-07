@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CVAnalyzerAPI.Data;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options):IdentityDbContext(options)
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<CV> CVs { get; set; }=default!;
     public DbSet<Analysis> Analyses { get; set; }=default!;

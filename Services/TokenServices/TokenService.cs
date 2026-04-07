@@ -11,7 +11,7 @@ namespace CVAnalyzerAPI.Services.TokenServices;
 public class TokenService(IOptions<JwtSettings> options) : ITokenService
 {
     private readonly JwtSettings _jwtSettings = options.Value;
-    public string CreateToken(ApplicationUser user,string role)
+    public TokenCreationResult CreateToken(ApplicationUser user,string role)
     {
         var claims = new[]
         {
@@ -25,15 +25,15 @@ public class TokenService(IOptions<JwtSettings> options) : ITokenService
             Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
 
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
+        var expires = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpiryInDays);
         var token = new JwtSecurityToken(
             issuer:_jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(_jwtSettings.ExpiryInDays),
+            expires:expires ,
             signingCredentials: creds
         );
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return new TokenCreationResult { Token= new JwtSecurityTokenHandler().WriteToken(token) ,ExpiresAt=expires};
     }
 }

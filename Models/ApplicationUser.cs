@@ -7,4 +7,5 @@ public class ApplicationUser:IdentityUser
     public DateTime CreatedAt { get; set; }
 
     public ICollection<CV> CVs { get; set; } = [];
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 }

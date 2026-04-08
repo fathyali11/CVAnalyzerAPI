@@ -4,6 +4,7 @@ using CVAnalyzerAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CVAnalyzerAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260407114909_useApplicationUserInIdentity")]
+    partial class useApplicationUserInIdentity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -61,7 +64,7 @@ namespace CVAnalyzerAPI.Migrations
 
                     b.HasIndex("CVId");
 
-                    b.ToTable("Analyses", null, t =>
+                    b.ToTable("Analyses", t =>
                         {
                             t.HasCheckConstraint("CK_Analysis_Score", "[Score] > 0 AND [Score] <= 100");
                         });
@@ -164,36 +167,7 @@ namespace CVAnalyzerAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("CVs", (string)null);
-                });
-
-            modelBuilder.Entity("CVAnalyzerAPI.Models.RefreshToken", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("CVs");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -367,17 +341,6 @@ namespace CVAnalyzerAPI.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("CVAnalyzerAPI.Models.RefreshToken", b =>
-                {
-                    b.HasOne("CVAnalyzerAPI.Models.ApplicationUser", "User")
-                        .WithMany("RefreshTokens")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -432,8 +395,6 @@ namespace CVAnalyzerAPI.Migrations
             modelBuilder.Entity("CVAnalyzerAPI.Models.ApplicationUser", b =>
                 {
                     b.Navigation("CVs");
-
-                    b.Navigation("RefreshTokens");
                 });
 
             modelBuilder.Entity("CVAnalyzerAPI.Models.CV", b =>

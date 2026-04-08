@@ -68,7 +68,35 @@ public class AuthsController(IAuthService _authService) : ControllerBase
         );
     }
 
-    
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.ForgotPasswordAsync(request, cancellationToken);
+        return result.Match(
+            success => Ok(new { Message = "If that email exists, a password reset link has been sent." }),
+            error => error.Code switch
+            {
+                ErrorCodes.BadRequest => BadRequest(error.Message),
+                _ => StatusCode(500, "An unexpected error occurred")
+            }
+        );
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.ResetPasswordAsync(request, cancellationToken);
+        return result.Match(
+            success => Ok(new { Message = "Password has been successfully reset." }),
+            error => error.Code switch
+            {
+                ErrorCodes.BadRequest => BadRequest(error.Message),
+                ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, error.Message),
+                _ => StatusCode(500, "An unexpected error occurred")
+            }
+        );
+    }
+
     private void PrepareRefreshTokenCookie(string refreshToken, DateTime expiresAt)
     {
         var cookiesOptions = new CookieOptions

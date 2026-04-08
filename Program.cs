@@ -4,6 +4,7 @@ using CVAnalyzerAPI.Data;
 using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using CVAnalyzerAPI.Middlewares;
 using CVAnalyzerAPI.Services.AuthServices;
+using CVAnalyzerAPI.Services.EmailServices;
 using CVAnalyzerAPI.Services.TokenServices;
 using CVAnalyzerAPI.Validators.AuthValidators;
 using FluentValidation;
@@ -69,7 +70,12 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator>();
 builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
+builder.Services.AddScoped<IValidator<ForgotPasswordRequest>, ForgotPasswordRequestValidator>();
+builder.Services.AddScoped<IValidator<ResetPasswordRequest>, ResetPasswordRequestValidator>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
+builder.Services.AddOptions<EmailSettings>()
+    .Bind(builder.Configuration.GetSection(nameof(EmailSettings)));
 
 builder.Services.AddCors(options =>
 {

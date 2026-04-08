@@ -71,10 +71,22 @@ builder.Services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator
 builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
 
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CVAnalyzerPolicy", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
+app.UseCors("CVAnalyzerPolicy");
 
 if (app.Environment.IsDevelopment())
 {

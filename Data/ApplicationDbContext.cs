@@ -8,6 +8,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<CV> CVs { get; set; }=default!;
     public DbSet<Analysis> Analyses { get; set; }=default!;
+    public DbSet<RefreshToken> RefreshTokens { get; set; } =default!;
     override protected void OnModelCreating(ModelBuilder builder)
     {
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);

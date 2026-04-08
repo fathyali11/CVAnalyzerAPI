@@ -1,4 +1,5 @@
 ﻿using CVAnalyzerAPI.Consts;
+using CVAnalyzerAPI.Data;
 using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using CVAnalyzerAPI.Models;
 using CVAnalyzerAPI.Services.TokenServices;
@@ -6,6 +7,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OneOf;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace CVAnalyzerAPI.Services.AuthServices;
 
@@ -14,7 +17,8 @@ public class AuthService(
     ILogger<AuthService> _logger,
     IValidator<RegisterRequest> _registerRequestValidator,
     IValidator<LoginRequest> _loginRequestValidator,
-    ITokenService _tokenService) : IAuthService
+    ITokenService _tokenService,
+    ApplicationDbContext _context) : IAuthService
 {
     public async Task<OneOf<AuthResponse,Error>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
@@ -65,7 +69,9 @@ public class AuthService(
             Email = user.Email,
             Role = roles.First(),
             Token = tokenCreationResult.Token,
-            Expiration = tokenCreationResult.ExpiresAt
+            Expiration = tokenCreationResult.ExpiresAt,
+            RefreshToken = tokenCreationResult.RefreshToken,
+            RefreshTokenExpiration = tokenCreationResult.RefreshTokenExpiresAt
         };
 
     }
@@ -113,7 +119,65 @@ public class AuthService(
             Email = user.Email!,
             Role = roles.First(),
             Token = tokenCreationResult.Token,
-            Expiration = tokenCreationResult.ExpiresAt
+            Expiration = tokenCreationResult.ExpiresAt,
+            RefreshToken = tokenCreationResult.RefreshToken,
+            RefreshTokenExpiration = tokenCreationResult.RefreshTokenExpiresAt
+        };
+    }
+    
+    public async Task<OneOf<AuthResponse, Error>> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
+    {
+        var principal = _tokenService.GetPrincipalFromExpiredToken(token);
+        if (principal is null)
+        {
+            _logger.LogWarning("Invalid token provided for refresh");
+            return new Error(ErrorCodes.BadRequest, "Invalid token");
+        }
+        var email = principal.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+        if (email is null)
+        {
+            _logger.LogWarning("Email claim not found in token for refresh");
+            return new Error(ErrorCodes.BadRequest, "Invalid token claims");
+        }
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            _logger.LogWarning("User with email {Email} not found for token refresh", email);
+            return new Error(ErrorCodes.NotFound, "User not found");
+        }
+        var refreshTokenFromDb= await _context.RefreshTokens
+            .FirstOrDefaultAsync(rt => rt.Token == refreshToken && rt.UserId == user.Id, cancellationToken);
+        if (refreshTokenFromDb is null)
+        {
+            _logger.LogWarning("Refresh token not found in database for user with email {Email}", email);
+            return new Error(ErrorCodes.NotFound, "Refresh token not found");
+        }
+        if (!refreshTokenFromDb.IsActive)
+        {
+            _logger.LogWarning("Refresh token is not active for user with email {Email}", email);
+            await _context.RefreshTokens.Where(x => x.UserId == user.Id)
+                .ExecuteDeleteAsync(cancellationToken);
+            return new Error(ErrorCodes.UnAuthorized, "Refresh token is not active");
+        }
+        refreshTokenFromDb.RevokedAt = DateTime.UtcNow;
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var tokenCreationResult = _tokenService.CreateToken(user, roles.First());
+        user.RefreshTokens.Add(new RefreshToken
+        {
+            Token = tokenCreationResult.RefreshToken,
+            ExpiresAt = tokenCreationResult.RefreshTokenExpiresAt
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+        return new AuthResponse
+        {
+            Name = user.UserName!,
+            Email = user.Email!,
+            Role = roles.First(),
+            Token = tokenCreationResult.Token,
+            Expiration = tokenCreationResult.ExpiresAt,
+            RefreshToken = tokenCreationResult.RefreshToken,
+            RefreshTokenExpiration = tokenCreationResult.RefreshTokenExpiresAt
         };
     }
 }

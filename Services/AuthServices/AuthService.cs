@@ -205,7 +205,7 @@ public class AuthService(
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encodedToken=WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-        var resetLink = $"http://localhost:3000/reset-password?email={request.Email}&token={encodedToken}";
+        var resetLink = $"http://localhost:4200/auth/reset-password?email={request.Email}&token={encodedToken}";
         var htmlTemplate = await File.ReadAllTextAsync("Templates/ResetPassword.html", cancellationToken);
         var body= htmlTemplate.
             Replace("{{UserName}}", user.UserName!).

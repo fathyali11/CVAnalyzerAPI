@@ -44,6 +44,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
             {
                 ErrorCodes.BadRequest => BadRequest(error.Message),
                 ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, error.Message),
+                ErrorCodes.NotFound => NotFound(error.Message),
                 _ => StatusCode(500, "An unexpected error occurred")
             }
         );

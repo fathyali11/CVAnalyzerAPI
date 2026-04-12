@@ -15,6 +15,7 @@ using Serilog;
 
 using Microsoft.AspNetCore.Identity;
 using CVAnalyzerAPI.Models;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -88,6 +89,29 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("ForgotPasswordPolicy", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: partition => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 3,         
+                Window = TimeSpan.FromHours(1),
+                SegmentsPerWindow = 3,     
+                QueueLimit = 0             
+            }));
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType= "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Too many requests. Please try again later."
+        }, cancellationToken);
+    };
+});
+
 
 var app = builder.Build();
 
@@ -103,6 +127,8 @@ if (app.Environment.IsDevelopment())
 app.UseSerilogRequestLogging();
 
 app.UseHttpsRedirection();
+app.UseRouting();
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

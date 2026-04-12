@@ -3,6 +3,7 @@ using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using CVAnalyzerAPI.Services.AuthServices;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CVAnalyzerAPI.Controllers;
 
@@ -70,6 +71,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting("ForgotPasswordPolicy")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.ForgotPasswordAsync(request, cancellationToken);

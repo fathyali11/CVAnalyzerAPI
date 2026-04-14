@@ -45,6 +45,12 @@ builder.Services.AddOptions<JwtSettings>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+    .ValidateDataAnnotations()
+builder.Services.AddOptions<CloudinarySettings>()
+    .Bind(builder.Configuration.GetSection(nameof(CloudinarySettings)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 var jwtSettings = builder.Configuration.GetSection(nameof(JwtSettings)).Get<JwtSettings>();
 
 builder.Services.AddAuthentication(options =>
@@ -74,6 +80,7 @@ builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddScoped<IValidator<ForgotPasswordRequest>, ForgotPasswordRequestValidator>();
 builder.Services.AddScoped<IValidator<ResetPasswordRequest>, ResetPasswordRequestValidator>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IFileService, CloudinaryService>();
 
 builder.Services.AddOptions<EmailSettings>()
     .Bind(builder.Configuration.GetSection(nameof(EmailSettings)));

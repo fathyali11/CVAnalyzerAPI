@@ -154,6 +154,37 @@ public class CVService(IFileService _fileService,
         );
         return response;
     }
+    
+    public async Task<OneOf<CvAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id, string? jobDescription, CancellationToken cancellationToken)
+    {
+        var cv = await _context.CVs.FindAsync(id);
+        if (cv is null)
+        {
+            _logger.LogWarning("Attempt to analyze non-existent CV with ID {CvId}.", id);
+            return new Error(ErrorCodes.BadRequest, "CV not found");
+        }
+        var analysisResultOrError = await _analyzeService.AnalyzeCVAsync(cv.ExtractedText, jobDescription);
+        if (analysisResultOrError.IsT1)
+        {
+            _logger.LogError("Error analyzing extracted CV with ID {CvId}: {Error}", id, analysisResultOrError.AsT1.Message);
+            return analysisResultOrError.AsT1;
+        }
+        var analysisResult = analysisResultOrError.AsT0;
+        var analysisRecord = new Analysis
+        {
+            CVId = cv.Id,
+            Score = analysisResult.Score,
+            Strengths = string.Join(";", analysisResult.Strengths),
+            Weaknesses = string.Join(";", analysisResult.Weaknesses),
+            Suggestions = string.Join(";", analysisResult.Suggestions),
+            JobMatchPercentage = analysisResult.JobMatchPercentage
+        };
+        await _context.Analyses.AddAsync(analysisRecord);
+        await _context.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Successfully analyzed extracted CV with ID {CvId}. Score: {Score}, Job Match: {JobMatchPercentage}",
+            id, analysisResult.Score, analysisResult.JobMatchPercentage);
+        return analysisResult;
+    }
     private async Task<string> ExtractTextFromPDFAsync(Stream pdfStream)
     {
         return await Task.Run(() =>

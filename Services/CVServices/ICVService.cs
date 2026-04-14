@@ -10,4 +10,5 @@ public interface ICVService
 
     Task<OneOf<List<GetCVResponse>, Error>> GetCVsAsync(CancellationToken cancellationToken);
     Task<OneOf<GetCVAnalysisResponse, Error>> GetCVAnalysisAsync(int cvId, CancellationToken cancellationToken);
+    Task<OneOf<CvAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id, string? jobDescription, CancellationToken cancellationToken);
 }

@@ -5,6 +5,7 @@ using CVAnalyzerAPI.Models;
 using CVAnalyzerAPI.Services.AnalyzeServices;
 using CVAnalyzerAPI.Services.AuthServices;
 using CVAnalyzerAPI.Services.FileServices;
+using Microsoft.EntityFrameworkCore;
 using FluentValidation;
 using OneOf;
 using System.Text;
@@ -99,6 +100,29 @@ public class CVService(IFileService _fileService,
         }
     }
 
+    public async Task<OneOf<List<GetCVResponse>, Error>> GetCVsAsync(CancellationToken cancellationToken)
+    {
+        var currentUserId = await _authService.GetCurrentUserIdAsync(cancellationToken);
+        if (currentUserId is null)
+        {
+            _logger.LogWarning("Unauthenticated attempt to retrieve CVs.");
+            return new Error(ErrorCodes.UnAuthorized, "User must be authenticated to retrieve CVs");
+        }
+
+        var cvs = await _context.CVs
+            .Include(cv=>cv.Analyses)
+            .Where(cv => cv.UserId == currentUserId)
+            .Select(cv=>new GetCVResponse(
+                cv.Id,
+                cv.FileName,
+                cv.FilePath,
+                cv.UploadedAt,
+                cv.Analyses.OrderByDescending(a=>a.Id).FirstOrDefault()!.Score
+                ))
+            .ToListAsync(cancellationToken);
+
+        return cvs;
+    }
 
     private async Task<string> ExtractTextFromPDFAsync(Stream pdfStream)
     {

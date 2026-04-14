@@ -6,6 +6,7 @@ public class CV
     public string UserId { get; set; }=null!;
     public string FileName { get; set; }=null!;
     public string FilePath { get; set; }=null!;
+    public string ExtractedText { get; set; }=null!;
     public DateTime UploadedAt { get; set; }
 
     public ApplicationUser User { get; set; }=default!;

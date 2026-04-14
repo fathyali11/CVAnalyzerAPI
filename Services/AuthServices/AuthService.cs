@@ -24,7 +24,8 @@ public class AuthService(
     IValidator<ResetPasswordRequest> _resetPasswordRequestValidator,
     ITokenService _tokenService,
     IEmailService _emailService,
-    ApplicationDbContext _context) : IAuthService
+    ApplicationDbContext _context,
+    IHttpContextAccessor _httpContextAccessor) : IAuthService
 {
     public async Task<OneOf<AuthResponse,Error>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
@@ -241,5 +242,22 @@ public class AuthService(
         }
 
         return true;
+    }
+
+    public async Task<string?> GetCurrentUserIdAsync(CancellationToken cancellationToken = default)
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext is null)
+        {
+            _logger.LogWarning("HttpContext is null when trying to get current user ID");
+            return null;
+        }
+        var userIdClaim = httpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+        if (userIdClaim is null)
+        {
+            _logger.LogWarning("NameIdentifier claim not found in HttpContext when trying to get current user ID");
+            return null;
+        }
+        return userIdClaim.Value;
     }
 }

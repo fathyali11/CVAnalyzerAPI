@@ -9,5 +9,5 @@ public interface ICVService
     Task<OneOf<CvAnalysisResponse, Error>> UploadAndAnalysisCVAsync(UploadCVRequest request, CancellationToken cancellationToken = default);
 
     Task<OneOf<List<GetCVResponse>, Error>> GetCVsAsync(CancellationToken cancellationToken);
-
+    Task<OneOf<GetCVAnalysisResponse, Error>> GetCVAnalysisAsync(int cvId, CancellationToken cancellationToken);
 }

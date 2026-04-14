@@ -66,7 +66,8 @@ public class CVService(IFileService _fileService,
                 FileName = request.File.FileName,
                 FilePath = url,
                 UploadedAt = DateTime.UtcNow,
-                UserId = currentUserId
+                UserId = currentUserId,
+                ExtractedText = text
             };
             await _context.CVs.AddAsync(cvRecord, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
@@ -124,6 +125,35 @@ public class CVService(IFileService _fileService,
         return cvs;
     }
 
+    public async Task<OneOf<GetCVAnalysisResponse,Error>> GetCVAnalysisAsync(int cvId, CancellationToken cancellationToken)
+    {
+        var currentUserId = await _authService.GetCurrentUserIdAsync(cancellationToken);
+        if (currentUserId is null)
+        {
+            _logger.LogWarning("Unauthenticated attempt to retrieve CV analysis for CV ID {CvId}.", cvId);
+            return new Error(ErrorCodes.UnAuthorized, "User must be authenticated to retrieve CV analysis");
+        }
+        var analysis = await _context.Analyses
+            .Include(a => a.CV)
+            .ThenInclude(cv=>cv.User)
+            .Where(a => a.CV.UserId == currentUserId && a.CVId == cvId)
+            .OrderByDescending(a => a.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (analysis is null)
+        {
+            _logger.LogWarning("No analysis found for CV ID {CvId} and user ID {UserId}.", cvId, currentUserId);
+            return new Error(ErrorCodes.BadRequest, "No analysis found for the specified CV");
+        }
+        var response = new GetCVAnalysisResponse(
+            analysis.Id,
+            analysis.Score,
+            analysis.Strengths,
+            analysis.Weaknesses,
+            analysis.Suggestions,
+            analysis.CV.User.UserName!
+        );
+        return response;
+    }
     private async Task<string> ExtractTextFromPDFAsync(Stream pdfStream)
     {
         return await Task.Run(() =>

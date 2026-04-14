@@ -10,7 +10,7 @@ public class Analysis
     public string Weaknesses { get; set; } = null!;
     public string Suggestions { get; set; } = null!;
     public int? JobMatchPercentage { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; }=DateTime.UtcNow;
 
     public CV CV { get; set; }=default!;
 }

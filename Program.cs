@@ -16,6 +16,11 @@ using Serilog;
 using Microsoft.AspNetCore.Identity;
 using CVAnalyzerAPI.Models;
 using System.Threading.RateLimiting;
+using CVAnalyzerAPI.Services.AnalyzeServices;
+using CVAnalyzerAPI.Services.FileServices;
+using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
+using CVAnalyzerAPI.Validators.CVValidators;
+using CVAnalyzerAPI.Services.CVServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,7 +50,11 @@ builder.Services.AddOptions<JwtSettings>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<GeminiSettings>()
+    .Bind(builder.Configuration.GetSection(nameof(GeminiSettings)))
     .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 builder.Services.AddOptions<CloudinarySettings>()
     .Bind(builder.Configuration.GetSection(nameof(CloudinarySettings)))
     .ValidateDataAnnotations()
@@ -79,8 +88,12 @@ builder.Services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator
 builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddScoped<IValidator<ForgotPasswordRequest>, ForgotPasswordRequestValidator>();
 builder.Services.AddScoped<IValidator<ResetPasswordRequest>, ResetPasswordRequestValidator>();
+builder.Services.AddScoped<IValidator<UploadCVRequest>, UploadCVRequestValidator>();
+
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHttpClient<IAnalyzeService, GeminiService>();
 builder.Services.AddScoped<IFileService, CloudinaryService>();
+builder.Services.AddScoped<ICVService, CVService>();
 
 builder.Services.AddOptions<EmailSettings>()
     .Bind(builder.Configuration.GetSection(nameof(EmailSettings)));
@@ -118,6 +131,8 @@ builder.Services.AddRateLimiter(options =>
         }, cancellationToken);
     };
 });
+
+builder.Services.AddHttpContextAccessor();
 
 
 var app = builder.Build();

@@ -65,9 +65,9 @@ public class CVsController(ICVService _cVService):ControllerBase
             });
     }
     [HttpPost("{id}/reanalyze")]
-    public async Task<IActionResult> ReanalyzeCV([FromRoute] int id, [FromBody] ReanalyzeCVRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> ReanalyzeCV([FromRoute] int id, CancellationToken cancellationToken)
     {
-        var result = await _cVService.AnalyzeExtractedCVAsync(id, request.JobDescription, cancellationToken);
+        var result = await _cVService.AnalyzeExtractedCVAsync(id, cancellationToken);
         return result.Match<IActionResult>(
             analysis => Ok(analysis),
             error => error.Code switch
@@ -77,7 +77,18 @@ public class CVsController(ICVService _cVService):ControllerBase
                 _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
             });
     }
-
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteCV([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        var result = await _cVService.DeleteCvAsync(id, cancellationToken);
+        return result.Code switch
+        {
+            ErrorCodes.None => NoContent(),
+            ErrorCodes.BadRequest => BadRequest(new { result.Message }),
+            ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, new { result.Message }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError, new { result.Message })
+        };
+    }
 
 }
 

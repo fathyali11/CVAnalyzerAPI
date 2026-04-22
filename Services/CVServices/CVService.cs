@@ -22,7 +22,7 @@ public class CVService(IFileService _fileService,
     IValidator<UploadCVRequest> _validator
     ) :ICVService
 {
-    public async Task<OneOf<CvAnalysisResponse, Error>> UploadAndAnalysisCVAsync(UploadCVRequest request, CancellationToken cancellationToken = default)
+    public async Task<OneOf<UploadCvResponse, Error>> UploadAndAnalysisCVAsync(UploadCVRequest request, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Received request to upload and analyze CV: {FileName}", request.File.FileName);
         var validationResult = await _validator.ValidateAsync(request, cancellationToken);
@@ -76,17 +76,30 @@ public class CVService(IFileService _fileService,
             {
                 CVId = cvRecord.Id,
                 Score = analysisResult.Score,
-                Strengths = string.Join(";", analysisResult.Strengths),
-                Weaknesses = string.Join(";", analysisResult.Weaknesses),
-                Suggestions = string.Join(";", analysisResult.Suggestions),
-                JobMatchPercentage = analysisResult.JobMatchPercentage
+                Strengths = analysisResult.Strengths.Select(s => new AnalysisStrength
+                {
+                    Icon = s.Icon,
+                    Heading = s.Heading,
+                    Description = s.Description
+                }).ToList(),
+                Weaknesses = analysisResult.Weaknesses,
+                Suggestions = analysisResult.Suggestions.Select(s => new AnalysisSuggestion
+                {
+                    Heading = s.Heading,
+                    Description = s.Description
+                }).ToList(),
+                JobMatchPercentage = analysisResult.JobMatchPercentage,
+                TechnicalAlignment = analysisResult.TechnicalAlignment,
+                SoftSkillsFit = analysisResult.SoftSkillsFit,
+                DomainExperience = analysisResult.DomainExperience,
+                JobDescription = request.JobDescription
             };
             await _context.Analyses.AddAsync(analysisRecord, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
-
-            return analysisResult;
+            _logger.LogInformation("CV record and analysis saved successfully for CV ID {CvId}.", cvRecord.Id);
+            return new UploadCvResponse(cvRecord.Id, analysisRecord.Id);
         }
         catch (Exception ex)
         {
@@ -136,9 +149,9 @@ public class CVService(IFileService _fileService,
         var analysis = await _context.Analyses
             .Include(a => a.CV)
             .ThenInclude(cv=>cv.User)
-            .Where(a => a.CV.UserId == currentUserId && a.CVId == cvId)
             .OrderByDescending(a => a.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(a => a.CV.UserId == currentUserId && a.CVId == cvId, cancellationToken);
         if (analysis is null)
         {
             _logger.LogWarning("No analysis found for CV ID {CvId} and user ID {UserId}.", cvId, currentUserId);
@@ -147,23 +160,44 @@ public class CVService(IFileService _fileService,
         var response = new GetCVAnalysisResponse(
             analysis.Id,
             analysis.Score,
-            analysis.Strengths,
-            analysis.Weaknesses,
-            analysis.Suggestions,
-            analysis.CV.User.UserName!
+            analysis.Strengths.Select(s => new StrengthsDto 
+            {
+                Icon = s.Icon,
+                Heading = s.Heading,
+                Description = s.Description
+            }).ToList(),
+            analysis.Weaknesses.Select(w => w).ToList(),
+            analysis.Suggestions.Select(s => new SuggestionsDto
+            {
+                Heading = s.Heading,
+                Description = s.Description
+            }).ToList(),
+            analysis.CV.User.UserName!,
+            analysis.JobMatchPercentage,
+            analysis.TechnicalAlignment,
+            analysis.SoftSkillsFit,
+            analysis.DomainExperience
         );
         return response;
     }
     
-    public async Task<OneOf<CvAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id, string? jobDescription, CancellationToken cancellationToken)
+    public async Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id,CancellationToken cancellationToken)
     {
-        var cv = await _context.CVs.FindAsync(id);
-        if (cv is null)
+        var cvResponseFromDb = await _context.CVs
+            .Select(x=>new
+            {
+                CvId = x.Id,
+                ExtractedText=x.ExtractedText,
+                JobDescription= x.Analyses.OrderByDescending(a=>a.Id).Select(a=>a.JobDescription).FirstOrDefault(),
+                UserName = x.User.UserName
+            })
+            .FirstOrDefaultAsync(x => x.CvId == id, cancellationToken);
+        if (cvResponseFromDb is null)
         {
             _logger.LogWarning("Attempt to analyze non-existent CV with ID {CvId}.", id);
             return new Error(ErrorCodes.BadRequest, "CV not found");
         }
-        var analysisResultOrError = await _analyzeService.AnalyzeCVAsync(cv.ExtractedText, jobDescription);
+        var analysisResultOrError = await _analyzeService.AnalyzeCVAsync(cvResponseFromDb.ExtractedText, cvResponseFromDb.JobDescription);
         if (analysisResultOrError.IsT1)
         {
             _logger.LogError("Error analyzing extracted CV with ID {CvId}: {Error}", id, analysisResultOrError.AsT1.Message);
@@ -172,18 +206,62 @@ public class CVService(IFileService _fileService,
         var analysisResult = analysisResultOrError.AsT0;
         var analysisRecord = new Analysis
         {
-            CVId = cv.Id,
+            CVId = cvResponseFromDb.CvId,
             Score = analysisResult.Score,
-            Strengths = string.Join(";", analysisResult.Strengths),
-            Weaknesses = string.Join(";", analysisResult.Weaknesses),
-            Suggestions = string.Join(";", analysisResult.Suggestions),
-            JobMatchPercentage = analysisResult.JobMatchPercentage
+            Strengths = analysisResult.Strengths.Select(s => new AnalysisStrength
+            {
+                Icon = s.Icon,
+                Heading = s.Heading,
+                Description = s.Description
+            }).ToList(),
+            Weaknesses = analysisResult.Weaknesses.Select(w => w).ToList(),
+            Suggestions = analysisResult.Suggestions.Select(s => new AnalysisSuggestion
+            {
+                Heading = s.Heading,
+                Description = s.Description
+            }).ToList(),
+            JobMatchPercentage = analysisResult.JobMatchPercentage,
+            TechnicalAlignment = analysisResult.TechnicalAlignment,
+            SoftSkillsFit = analysisResult.SoftSkillsFit,
+            DomainExperience = analysisResult.DomainExperience,
+            JobDescription = cvResponseFromDb.JobDescription
         };
         await _context.Analyses.AddAsync(analysisRecord);
         await _context.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Successfully analyzed extracted CV with ID {CvId}. Score: {Score}, Job Match: {JobMatchPercentage}",
             id, analysisResult.Score, analysisResult.JobMatchPercentage);
-        return analysisResult;
+        return new GetCVAnalysisResponse(
+            analysisRecord.Id,
+            analysisRecord.Score,
+            analysisResult.Strengths,
+            analysisResult.Weaknesses,
+            analysisResult.Suggestions,
+            cvResponseFromDb.UserName ?? "Unknown",
+            analysisResult.JobMatchPercentage,
+            analysisResult.TechnicalAlignment,
+            analysisResult.SoftSkillsFit,
+            analysisResult.DomainExperience
+        );
+    }
+    
+    public async Task<Error> DeleteCvAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var currentUserId = await _authService.GetCurrentUserIdAsync(cancellationToken);
+        if (currentUserId is null)
+        {
+            _logger.LogWarning("Unauthenticated attempt to delete CV with ID {CvId}.", id);
+            return new Error(ErrorCodes.UnAuthorized, "User must be authenticated to delete CV");
+        }
+        var cv = await _context.CVs.FirstOrDefaultAsync(cv => cv.Id == id && cv.UserId == currentUserId, cancellationToken);
+        if (cv is null)
+        {
+            _logger.LogWarning("Attempt to delete non-existent CV with ID {CvId} for user ID {UserId}.", id, currentUserId);
+            return new Error(ErrorCodes.BadRequest, "CV not found");
+        }
+        _context.CVs.Remove(cv);
+        await _context.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Successfully deleted CV with ID {CvId} for user ID {UserId}.", id, currentUserId);
+        return new Error(ErrorCodes.None, "CV deleted successfully");
     }
     private async Task<string> ExtractTextFromPDFAsync(Stream pdfStream)
     {

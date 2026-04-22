@@ -134,6 +134,11 @@ public class AuthService(
     
     public async Task<OneOf<AuthResponse, Error>> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(refreshToken))
+        {
+            _logger.LogWarning("Refresh failed: Token or RefreshToken is empty.");
+            return new Error(ErrorCodes.UnAuthorized, "Access Token and Refresh Token are required.");
+        }
         var principal = _tokenService.GetPrincipalFromExpiredToken(token);
         if (principal is null)
         {

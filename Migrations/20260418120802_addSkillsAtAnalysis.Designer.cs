@@ -4,6 +4,7 @@ using CVAnalyzerAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CVAnalyzerAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260418120802_addSkillsAtAnalysis")]
+    partial class addSkillsAtAnalysis
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -70,7 +73,7 @@ namespace CVAnalyzerAPI.Migrations
 
                     b.HasIndex("CVId");
 
-                    b.ToTable("Analyses", null, t =>
+                    b.ToTable("Analyses", t =>
                         {
                             t.HasCheckConstraint("CK_Analysis_Score", "[Score] > 0 AND [Score] <= 100");
                         });
@@ -177,7 +180,7 @@ namespace CVAnalyzerAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("CVs", (string)null);
+                    b.ToTable("CVs");
                 });
 
             modelBuilder.Entity("CVAnalyzerAPI.Models.RefreshToken", b =>
@@ -207,7 +210,7 @@ namespace CVAnalyzerAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

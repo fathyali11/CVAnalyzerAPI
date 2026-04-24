@@ -11,6 +11,7 @@ using OneOf;
 using System.Text;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
+using Org.BouncyCastle.Bcpg;
 
 namespace CVAnalyzerAPI.Services.CVServices;
 
@@ -190,6 +191,7 @@ public class CVService(IFileService _fileService,
                 CvId = x.Id,
                 ExtractedText=x.ExtractedText,
                 JobDescription= x.Analyses.OrderByDescending(a=>a.Id).Select(a=>a.JobDescription).FirstOrDefault(),
+                UserId = x.UserId,
                 UserName = x.User.UserName,
                 ShareToken=x.ShareToken
             })
@@ -198,6 +200,12 @@ public class CVService(IFileService _fileService,
         {
             _logger.LogWarning("Attempt to analyze non-existent CV with ID {CvId}.", id);
             return new Error(ErrorCodes.BadRequest, "CV not found");
+        }
+        var currentUserId = await _authService.GetCurrentUserIdAsync(cancellationToken);
+        if(currentUserId is null|| currentUserId != cvResponseFromDb.UserId)
+        {
+            _logger.LogWarning("Unauthorized attempt to analyze CV with ID {CvId} by user ID {UserId}.", id, currentUserId);
+            return new Error(ErrorCodes.UnAuthorized, "User is not authorized to analyze this CV");
         }
         var analysisResultOrError = await _analyzeService.AnalyzeCVAsync(cvResponseFromDb.ExtractedText, cvResponseFromDb.JobDescription);
         if (analysisResultOrError.IsT1)

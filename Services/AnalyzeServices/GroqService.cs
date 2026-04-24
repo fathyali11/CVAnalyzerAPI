@@ -32,7 +32,7 @@ public class GroqService(HttpClient _httpClient, IOptions<GroqSettings> options)
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
-
+        Console.WriteLine($"Sending request to Groq API at Url: {_settings.Url} with model {_settings.Model}");
         var response = await _httpClient.PostAsync(_settings.Url, content);
 
         if (!response.IsSuccessStatusCode)

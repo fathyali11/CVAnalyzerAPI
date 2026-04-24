@@ -21,6 +21,8 @@ using CVAnalyzerAPI.Services.FileServices;
 using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
 using CVAnalyzerAPI.Validators.CVValidators;
 using CVAnalyzerAPI.Services.CVServices;
+using Polly.Extensions.Http;
+using Polly;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -91,7 +93,7 @@ builder.Services.AddScoped<IValidator<ResetPasswordRequest>, ResetPasswordReques
 builder.Services.AddScoped<IValidator<UploadCVRequest>, UploadCVRequestValidator>();
 
 builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddHttpClient<IAnalyzeService, GeminiService>();
+builder.Services.AddHttpClient<IAnalyzeService, GeminiService>().AddPolicyHandler(GetRetryPolicy());
 builder.Services.AddScoped<IFileService, CloudinaryService>();
 builder.Services.AddScoped<ICVService, CVService>();
 
@@ -102,7 +104,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("CVAnalyzerPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
+        policy.WithOrigins("http://localhost:4200", "https://cv-analyzer-ui.vercel.app")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -134,6 +136,20 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddHttpContextAccessor();
 
+
+
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError() 
+        .WaitAndRetryAsync(
+            retryCount: 3, 
+            sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), 
+            onRetry: (outcome, timespan, retryAttempt, context) =>
+            {
+                Console.WriteLine($"[Polly Warning] Gemini API is busy. Delaying for {timespan.TotalSeconds} seconds, then making retry {retryAttempt}...");
+            });
+}
 
 var app = builder.Build();
 

@@ -1,22 +1,8 @@
-﻿using CloudinaryDotNet.Actions;
-using CVAnalyzerAPI.Consts;
+﻿using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
 using CVAnalyzerAPI.Services.CVServices;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.VisualBasic;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Utilities.IO;
-using System.ComponentModel;
-using System.Reflection;
-using UglyToad.PdfPig.Core;
-using UglyToad.PdfPig.Graphics.Operations.SpecialGraphicsState;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace CVAnalyzerAPI.Controllers;
 
@@ -88,6 +74,21 @@ public class CVsController(ICVService _cVService):ControllerBase
             ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, new { result.Message }),
             _ => StatusCode(StatusCodes.Status500InternalServerError, new { result.Message })
         };
+    }
+
+    [AllowAnonymous]
+    [HttpGet("shared/{token}")]
+    public async Task<IActionResult> GetSharedAnalysis(Guid token)
+    {
+
+        var result = await _cVService.GetByShareTokenAsync(token);
+        return result.Match<IActionResult>(
+            analysis => Ok(analysis),
+            error => error.Code switch
+            {
+                ErrorCodes.NotFound => NotFound(new { error.Message }),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
+            });
     }
 
 }

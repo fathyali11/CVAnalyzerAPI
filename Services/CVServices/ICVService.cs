@@ -12,4 +12,5 @@ public interface ICVService
     Task<OneOf<GetCVAnalysisResponse, Error>> GetCVAnalysisAsync(int cvId, CancellationToken cancellationToken);
     Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id, CancellationToken cancellationToken);
     Task<Error> DeleteCvAsync(int id, CancellationToken cancellationToken = default);
+    Task<OneOf<GetCVAnalysisResponse, Error>> GetByShareTokenAsync(Guid token);
 }

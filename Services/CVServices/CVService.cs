@@ -263,6 +263,43 @@ public class CVService(IFileService _fileService,
         _logger.LogInformation("Successfully deleted CV with ID {CvId} for user ID {UserId}.", id, currentUserId);
         return new Error(ErrorCodes.None, "CV deleted successfully");
     }
+   
+    public async Task<OneOf<GetCVAnalysisResponse, Error>> GetByShareTokenAsync(Guid token)
+    {
+        var analysis = await _context.Analyses
+            .Include(a => a.CV)
+            .ThenInclude(cv => cv.User)
+            .OrderByDescending(a => a.Id)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(a => a.CV.ShareToken == token);
+        if (analysis is null)
+        {
+            _logger.LogWarning("No analysis found for share token {Token}.", token);
+            return new Error(ErrorCodes.BadRequest, "No analysis found for the specified share token");
+        }
+        var response = new GetCVAnalysisResponse(
+            analysis.Id,
+            analysis.Score,
+            analysis.Strengths.Select(s => new StrengthsDto
+            {
+                Icon = s.Icon,
+                Heading = s.Heading,
+                Description = s.Description
+            }).ToList(),
+            analysis.Weaknesses.Select(w => w).ToList(),
+            analysis.Suggestions.Select(s => new SuggestionsDto
+            {
+                Heading = s.Heading,
+                Description = s.Description
+            }).ToList(),
+            analysis.CV.User.UserName!,
+            analysis.JobMatchPercentage,
+            analysis.TechnicalAlignment,
+            analysis.SoftSkillsFit,
+            analysis.DomainExperience
+        );
+        return response;
+    }
     private async Task<string> ExtractTextFromPDFAsync(Stream pdfStream)
     {
         return await Task.Run(() =>

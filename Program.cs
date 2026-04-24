@@ -16,6 +16,13 @@ using Serilog;
 using Microsoft.AspNetCore.Identity;
 using CVAnalyzerAPI.Models;
 using System.Threading.RateLimiting;
+using CVAnalyzerAPI.Services.AnalyzeServices;
+using CVAnalyzerAPI.Services.FileServices;
+using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
+using CVAnalyzerAPI.Validators.CVValidators;
+using CVAnalyzerAPI.Services.CVServices;
+using Polly.Extensions.Http;
+using Polly;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +49,16 @@ builder.Services.AddIdentityCore<ApplicationUser>()
 
 builder.Services.AddOptions<JwtSettings>()
     .Bind(builder.Configuration.GetSection(nameof(JwtSettings)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<GeminiSettings>()
+    .Bind(builder.Configuration.GetSection(nameof(GeminiSettings)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<CloudinarySettings>()
+    .Bind(builder.Configuration.GetSection(nameof(CloudinarySettings)))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
@@ -73,7 +90,12 @@ builder.Services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator
 builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddScoped<IValidator<ForgotPasswordRequest>, ForgotPasswordRequestValidator>();
 builder.Services.AddScoped<IValidator<ResetPasswordRequest>, ResetPasswordRequestValidator>();
+builder.Services.AddScoped<IValidator<UploadCVRequest>, UploadCVRequestValidator>();
+
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHttpClient<IAnalyzeService, GeminiService>().AddPolicyHandler(GetRetryPolicy());
+builder.Services.AddScoped<IFileService, CloudinaryService>();
+builder.Services.AddScoped<ICVService, CVService>();
 
 builder.Services.AddOptions<EmailSettings>()
     .Bind(builder.Configuration.GetSection(nameof(EmailSettings)));
@@ -82,7 +104,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("CVAnalyzerPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
+        policy.WithOrigins("http://localhost:4200", "https://cv-analyzer-ui.vercel.app")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -112,6 +134,22 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
+builder.Services.AddHttpContextAccessor();
+
+
+
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError() 
+        .WaitAndRetryAsync(
+            retryCount: 3, 
+            sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), 
+            onRetry: (outcome, timespan, retryAttempt, context) =>
+            {
+                Console.WriteLine($"[Polly Warning] Gemini API is busy. Delaying for {timespan.TotalSeconds} seconds, then making retry {retryAttempt}...");
+            });
+}
 
 var app = builder.Build();
 

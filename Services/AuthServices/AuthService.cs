@@ -24,7 +24,8 @@ public class AuthService(
     IValidator<ResetPasswordRequest> _resetPasswordRequestValidator,
     ITokenService _tokenService,
     IEmailService _emailService,
-    ApplicationDbContext _context) : IAuthService
+    ApplicationDbContext _context,
+    IHttpContextAccessor _httpContextAccessor) : IAuthService
 {
     public async Task<OneOf<AuthResponse,Error>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
@@ -69,6 +70,14 @@ public class AuthService(
         var roles = await _userManager.GetRolesAsync(user);
         var tokenCreationResult=_tokenService.CreateToken(user,roles.First());
 
+        user.RefreshTokens.Add(new RefreshToken
+        {
+            Token = tokenCreationResult.RefreshToken,
+            ExpiresAt = tokenCreationResult.RefreshTokenExpiresAt
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+
+
         return new AuthResponse
         {
             Name = user.UserName,
@@ -82,7 +91,7 @@ public class AuthService(
 
     }
 
-    public async Task<OneOf<AuthResponse, Error>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
+    public async Task<OneOf<AuthResponse, Error>> LoginAsync(LoginRequest request,string refreshToken, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Login user with email: {Email}", request.Email);
         var validationResult = await _loginRequestValidator.ValidateAsync(request, cancellationToken);
@@ -117,6 +126,22 @@ public class AuthService(
             _logger.LogError("Failed to create token for user with email {Email}", request.Email);
             return new Error(ErrorCodes.BadRequest, "Failed to create token");
         }
+        user.RefreshTokens.Add(new RefreshToken
+        {
+            Token = tokenCreationResult.RefreshToken,
+            ExpiresAt = tokenCreationResult.RefreshTokenExpiresAt
+        });
+        var refreshTokenFromDb = await _context.RefreshTokens
+            .FirstOrDefaultAsync(rt => rt.Token == refreshToken && rt.UserId == user.Id, cancellationToken);
+        if(refreshTokenFromDb is null|| !refreshTokenFromDb.IsActive)
+        {
+            _logger.LogWarning("Provided refresh token is invalid or inactive for user with email {Email}", request.Email);
+            await _context.RefreshTokens.Where(x => x.UserId == user.Id)
+                .ExecuteDeleteAsync(cancellationToken);
+            return new Error(ErrorCodes.UnAuthorized, "Invalid refresh token");
+        }
+        refreshTokenFromDb.RevokedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Token created successfully for user with email {Email}", request.Email);
         return new AuthResponse
@@ -133,6 +158,12 @@ public class AuthService(
     
     public async Task<OneOf<AuthResponse, Error>> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(refreshToken))
+        {
+            _logger.LogWarning("Refresh failed: Token or RefreshToken is empty.");
+            _logger.LogWarning("Provided token: {Token}, Provided refresh token: {RefreshToken}", token, refreshToken);
+            return new Error(ErrorCodes.UnAuthorized, "Access Token and Refresh Token are required.");
+        }
         var principal = _tokenService.GetPrincipalFromExpiredToken(token);
         if (principal is null)
         {
@@ -241,5 +272,22 @@ public class AuthService(
         }
 
         return true;
+    }
+
+    public async Task<string?> GetCurrentUserIdAsync(CancellationToken cancellationToken = default)
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext is null)
+        {
+            _logger.LogWarning("HttpContext is null when trying to get current user ID");
+            return null;
+        }
+        var userIdClaim = httpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+        if (userIdClaim is null)
+        {
+            _logger.LogWarning("NameIdentifier claim not found in HttpContext when trying to get current user ID");
+            return null;
+        }
+        return userIdClaim.Value;
     }
 }

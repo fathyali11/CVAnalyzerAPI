@@ -12,6 +12,9 @@ public class CVConfiguration : IEntityTypeConfiguration<CV>
             builder.Property(c => c.FileName).IsRequired().HasMaxLength(255);
             builder.Property(c => c.FilePath).IsRequired().HasMaxLength(500);
             builder.Property(c => c.UploadedAt).IsRequired();
+            builder.Property(c => c.ShareToken).IsRequired();
+
+            builder.HasIndex(c=> c.ShareToken).IsUnique();
 
             builder.HasOne(c => c.User)
                     .WithMany(u => u.CVs)

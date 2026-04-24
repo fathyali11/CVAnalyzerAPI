@@ -34,7 +34,8 @@ public class AuthsController(IAuthService _authService) : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var result = await _authService.LoginAsync(request, cancellationToken);
+        Request.Cookies.TryGetValue("refreshToken", out var refreshTokenFromCookie);
+        var result = await _authService.LoginAsync(request, refreshTokenFromCookie!, cancellationToken);
         return result.Match<IActionResult>(
             authResponse =>
             {
@@ -106,7 +107,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
         {
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.Strict,
+            SameSite = SameSiteMode.None,
             Expires = expiresAt
         };
         Response.Cookies.Append("refreshToken", refreshToken, cookiesOptions);

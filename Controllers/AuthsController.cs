@@ -34,8 +34,8 @@ public class AuthsController(IAuthService _authService) : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken = default)
     {
-        Request.Cookies.TryGetValue("refreshToken", out var refreshTokenFromCookie);
-        var result = await _authService.LoginAsync(request, refreshTokenFromCookie!, cancellationToken);
+
+        var result = await _authService.LoginAsync(request, cancellationToken);
         return result.Match<IActionResult>(
             authResponse =>
             {

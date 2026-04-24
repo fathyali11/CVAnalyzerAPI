@@ -91,7 +91,7 @@ public class AuthService(
 
     }
 
-    public async Task<OneOf<AuthResponse, Error>> LoginAsync(LoginRequest request,string refreshToken, CancellationToken cancellationToken = default)
+    public async Task<OneOf<AuthResponse, Error>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Login user with email: {Email}", request.Email);
         var validationResult = await _loginRequestValidator.ValidateAsync(request, cancellationToken);
@@ -131,16 +131,7 @@ public class AuthService(
             Token = tokenCreationResult.RefreshToken,
             ExpiresAt = tokenCreationResult.RefreshTokenExpiresAt
         });
-        var refreshTokenFromDb = await _context.RefreshTokens
-            .FirstOrDefaultAsync(rt => rt.Token == refreshToken && rt.UserId == user.Id, cancellationToken);
-        if(refreshTokenFromDb is null|| !refreshTokenFromDb.IsActive)
-        {
-            _logger.LogWarning("Provided refresh token is invalid or inactive for user with email {Email}", request.Email);
-            await _context.RefreshTokens.Where(x => x.UserId == user.Id)
-                .ExecuteDeleteAsync(cancellationToken);
-            return new Error(ErrorCodes.UnAuthorized, "Invalid refresh token");
-        }
-        refreshTokenFromDb.RevokedAt = DateTime.UtcNow;
+
         await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Token created successfully for user with email {Email}", request.Email);

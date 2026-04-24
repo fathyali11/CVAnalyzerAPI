@@ -2,55 +2,66 @@
 using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
 using Microsoft.Extensions.Options;
 using OneOf;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
 namespace CVAnalyzerAPI.Services.AnalyzeServices;
 
-
-public class GeminiService(HttpClient _httpClient,IOptions<GeminiSettings> options) : IAnalyzeService
+public class GroqService(HttpClient _httpClient, IOptions<GroqSettings> options) : IAnalyzeService
 {
-    private readonly GeminiSettings _settings = options.Value;
+    private readonly GroqSettings _settings = options.Value;
+
     public async Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeCVAsync(string cvText, string? jobDescription = null)
     {
         var prompt = BuildPrompt(cvText, jobDescription);
 
+
         var requestBody = new
         {
-            contents = new[]
+            model = _settings.Model, 
+            messages = new[]
             {
-                new { parts = new[] { new { text = prompt } } }
+                new { role = "system", content = "You are an expert HR and Technical Recruiter. Analyze CVs and return structured JSON." },
+                new { role = "user", content = prompt }
             },
-            generationConfig = new
-            {
-                response_mime_type = "application/json"
-            }
+            response_format = new { type = "json_object" }, 
+            temperature = 0.5 
         };
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync($"{_settings.Url}?key={_settings.ApiKey}", content);
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+
+        var response = await _httpClient.PostAsync(_settings.Url, content);
 
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync();
-            return new Error(ErrorCodes.BadRequest, $"Gemini API returned status code {response.StatusCode}: {error}");
+            return new Error(ErrorCodes.BadRequest, $"Groq API returned status code {response.StatusCode}: {error}");
         }
 
         var responseString = await response.Content.ReadAsStringAsync();
 
-        using var jsonDocument = JsonDocument.Parse(responseString);
-        var resultText = jsonDocument.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString();
+        try
+        {
+            using var jsonDocument = JsonDocument.Parse(responseString);
 
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var analysisResult = JsonSerializer.Deserialize<GetCVAnalysisResponse>(resultText!, options);
+            var resultText = jsonDocument.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString();
 
-        return analysisResult is not null ? analysisResult : new Error(ErrorCodes.BadRequest, "Failed to parse Gemini API response into CvAnalysisResult");
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var analysisResult = JsonSerializer.Deserialize<GetCVAnalysisResponse>(resultText!, options);
+
+            return analysisResult is not null ? analysisResult : new Error(ErrorCodes.BadRequest, "Failed to parse Groq API response");
+        }
+        catch (Exception ex)
+        {
+            return new Error(ErrorCodes.BadRequest, $"Error during parsing: {ex.Message}");
+        }
     }
 
     private string BuildPrompt(string cvText, string? jobDescription)

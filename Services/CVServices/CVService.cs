@@ -172,6 +172,7 @@ public class CVService(IFileService _fileService,
                 Heading = s.Heading,
                 Description = s.Description
             }).ToList(),
+            analysis.CV.ShareToken.ToString(),
             analysis.CV.User.UserName!,
             analysis.JobMatchPercentage,
             analysis.TechnicalAlignment,
@@ -189,7 +190,8 @@ public class CVService(IFileService _fileService,
                 CvId = x.Id,
                 ExtractedText=x.ExtractedText,
                 JobDescription= x.Analyses.OrderByDescending(a=>a.Id).Select(a=>a.JobDescription).FirstOrDefault(),
-                UserName = x.User.UserName
+                UserName = x.User.UserName,
+                ShareToken=x.ShareToken
             })
             .FirstOrDefaultAsync(x => x.CvId == id, cancellationToken);
         if (cvResponseFromDb is null)
@@ -236,6 +238,7 @@ public class CVService(IFileService _fileService,
             analysisResult.Strengths,
             analysisResult.Weaknesses,
             analysisResult.Suggestions,
+            cvResponseFromDb.ShareToken.ToString(),
             cvResponseFromDb.UserName ?? "Unknown",
             analysisResult.JobMatchPercentage,
             analysisResult.TechnicalAlignment,
@@ -292,6 +295,7 @@ public class CVService(IFileService _fileService,
                 Heading = s.Heading,
                 Description = s.Description
             }).ToList(),
+            analysis.CV.ShareToken.ToString(),
             analysis.CV.User.UserName!,
             analysis.JobMatchPercentage,
             analysis.TechnicalAlignment,

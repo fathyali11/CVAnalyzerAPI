@@ -62,6 +62,11 @@ builder.Services.AddOptions<CloudinarySettings>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<GroqSettings>()
+    .Bind(builder.Configuration.GetSection(nameof(GroqSettings)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 var jwtSettings = builder.Configuration.GetSection(nameof(JwtSettings)).Get<JwtSettings>();
 
 builder.Services.AddAuthentication(options =>
@@ -93,7 +98,7 @@ builder.Services.AddScoped<IValidator<ResetPasswordRequest>, ResetPasswordReques
 builder.Services.AddScoped<IValidator<UploadCVRequest>, UploadCVRequestValidator>();
 
 builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddHttpClient<IAnalyzeService, GeminiService>().AddPolicyHandler(GetRetryPolicy());
+builder.Services.AddHttpClient<IAnalyzeService, GroqService>().AddPolicyHandler(GetRetryPolicy());
 builder.Services.AddScoped<IFileService, CloudinaryService>();
 builder.Services.AddScoped<ICVService, CVService>();
 

@@ -6,6 +6,7 @@ public record GetCVAnalysisResponse(
     List<StrengthsDto> Strengths,
     List<string> Weaknesses,
     List<SuggestionsDto> Suggestions,
+    string ShareToken,
     string UserName,
     int? JobMatchPercentage,
     int TechnicalAlignment,

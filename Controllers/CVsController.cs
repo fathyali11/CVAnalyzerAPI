@@ -77,7 +77,7 @@ public class CVsController(ICVService _cVService):ControllerBase
     }
 
     [AllowAnonymous]
-    [HttpGet("shared/{token}")]
+    [HttpGet("share-analysis/{token}")]
     public async Task<IActionResult> GetSharedAnalysis(Guid token)
     {
 

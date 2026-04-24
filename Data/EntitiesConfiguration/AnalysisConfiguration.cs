@@ -10,7 +10,7 @@ public class AnalysisConfiguration : IEntityTypeConfiguration<Analysis>
     public void Configure(EntityTypeBuilder<Analysis> builder)
     {
         builder.ToTable(t =>
-        t.HasCheckConstraint("CK_Analysis_Score", "[Score] > 0 AND [Score] <= 100"));
+        t.HasCheckConstraint("CK_Analysis_Score", "\"Score\" > 0 AND \"Score\" <= 100"));
 
         builder.Property(a => a.Strengths)
         .HasConversion(

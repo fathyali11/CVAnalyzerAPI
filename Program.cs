@@ -153,8 +153,10 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 app.UseExceptionHandler();
+
+app.UseRouting();
+
 app.UseCors("CVAnalyzerPolicy");
 
 if (app.Environment.IsDevelopment())
@@ -163,11 +165,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseSerilogRequestLogging();
-
 app.UseHttpsRedirection();
-app.UseRouting();
-app.UseRateLimiter();
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

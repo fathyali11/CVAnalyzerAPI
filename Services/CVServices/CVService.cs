@@ -310,39 +310,46 @@ public class CVService(IFileService _fileService,
         return new Error(ErrorCodes.None, "CV deleted successfully");
     }
    
-    public async Task<OneOf<GetCVAnalysisResponse, Error>> GetByShareTokenAsync(Guid token)
+    public async Task<OneOf<GetCVAnalysisResponse, Error>> GetByShareTokenAsync(Guid token,CancellationToken cancellationToken=default)
     {
         var cacheKey =CacheKeys.SharedCv(token);
 
         var analysis = await _cache.GetOrCreateAsync(cacheKey,
-            async _=>{
-             var a = await _context.Analyses
-                .Where(a => a.CV.ShareToken == token)
-                .Select(a=> new GetCVAnalysisResponse(
-                    a.Id,
-                    a.Score,
-                    a.Strengths.Select(s => new StrengthsDto
-                    {
-                        Icon = s.Icon,
-                        Heading = s.Heading,
-                        Description = s.Description
-                    }).ToList(),
-                    a.Weaknesses.Select(w => w).ToList(),
-                    a.Suggestions.Select(s => new SuggestionsDto
-                    {
-                        Heading = s.Heading,
-                        Description = s.Description
-                    }).ToList(),
-                    a.CV.ShareToken.ToString(),
-                    a.CV.User.UserName!,
-                    a.JobMatchPercentage,
-                    a.TechnicalAlignment,
-                    a.SoftSkillsFit,
-                    a.DomainExperience
-                ))
-                .FirstOrDefaultAsync(cancellationToken: _);
-                return a;
-        });
+           async _ =>
+           {
+               var a = await _context.Analyses
+                       .AsNoTracking()
+                       .Include(a => a.CV)
+                       .ThenInclude(cv => cv.User)
+                       .OrderByDescending(a => a.Id)
+                       .AsSplitQuery()
+                       .FirstOrDefaultAsync(a => a.CV.ShareToken == token, cancellationToken);
+
+               if (a is null) return null;
+               return new GetCVAnalysisResponse(
+                   a.Id,
+                   a.Score,
+                   a.Strengths.Select(s => new StrengthsDto
+                   {
+                       Icon = s.Icon,
+                       Heading = s.Heading,
+                       Description = s.Description
+                   }).ToList(),
+                   a.Weaknesses.ToList(),
+                   a.Suggestions.Select(s => new SuggestionsDto
+                   {
+                       Heading = s.Heading,
+                       Description = s.Description
+                   }).ToList(),
+                   a.CV.ShareToken.ToString(),
+                   a.CV.User.UserName ?? "Unknown",
+                   a.JobMatchPercentage,
+                   a.TechnicalAlignment,
+                   a.SoftSkillsFit,
+                   a.DomainExperience
+               );
+           }, cancellationToken: cancellationToken);
+
         if (analysis is null)
         {
             _logger.LogWarning("No analysis found for share token {Token}.", token);

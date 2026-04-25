@@ -82,10 +82,10 @@ public class CVsController(ICVService _cVService):ControllerBase
     [EnableRateLimiting("public-link")]
     [AllowAnonymous]
     [HttpGet("share-analysis/{token}")]
-    public async Task<IActionResult> GetSharedAnalysis(Guid token)
+    public async Task<IActionResult> GetSharedAnalysis(Guid token, CancellationToken cancellationToken = default)
     {
 
-        var result = await _cVService.GetByShareTokenAsync(token);
+        var result = await _cVService.GetByShareTokenAsync(token, cancellationToken);
         return result.Match<IActionResult>(
             analysis => Ok(analysis),
             error => error.Code switch

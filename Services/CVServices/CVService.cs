@@ -11,7 +11,7 @@ using OneOf;
 using System.Text;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
-using Org.BouncyCastle.Bcpg;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace CVAnalyzerAPI.Services.CVServices;
 
@@ -20,6 +20,7 @@ public class CVService(IFileService _fileService,
     IAnalyzeService _analyzeService,
     ApplicationDbContext _context,
     IAuthService _authService,
+    HybridCache _cache,
     IValidator<UploadCVRequest> _validator
     ) :ICVService
 {
@@ -99,6 +100,8 @@ public class CVService(IFileService _fileService,
             await _context.SaveChangesAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
+
+            await _cache.RemoveAsync($"user_cvs_{currentUserId}", cancellationToken);
             _logger.LogInformation("CV record and analysis saved successfully for CV ID {CvId}.", cvRecord.Id);
             return new UploadCvResponse(cvRecord.Id, analysisRecord.Id);
         }
@@ -124,19 +127,27 @@ public class CVService(IFileService _fileService,
             return new Error(ErrorCodes.UnAuthorized, "User must be authenticated to retrieve CVs");
         }
 
-        var cvs = await _context.CVs
-            .Include(cv=>cv.Analyses)
-            .Where(cv => cv.UserId == currentUserId)
-            .Select(cv=>new GetCVResponse(
-                cv.Id,
-                cv.FileName,
-                cv.FilePath,
-                cv.UploadedAt,
-                cv.Analyses.OrderByDescending(a=>a.Id).FirstOrDefault()!.Score
-                ))
-            .ToListAsync(cancellationToken);
+        var cacheKey = CacheKeys.UserCvs(currentUserId);
+        var cachedCVs = await _cache.GetOrCreateAsync(cacheKey,
+            async _ =>
+            {
+                var cvs = await _context.CVs
+                .Include(cv => cv.Analyses)
+                .Where(cv => cv.UserId == currentUserId)
+                .Select(cv => new GetCVResponse(
+                    cv.Id,
+                    cv.FileName,
+                    cv.FilePath,
+                    cv.UploadedAt,
+                    cv.Analyses.OrderByDescending(a => a.Id).FirstOrDefault()!.Score
+                    ))
+                .ToListAsync(cancellationToken);
+                return cvs;
+            });
 
-        return cvs;
+        
+
+        return cachedCVs;
     }
 
     public async Task<OneOf<GetCVAnalysisResponse,Error>> GetCVAnalysisAsync(int cvId, CancellationToken cancellationToken)
@@ -147,55 +158,71 @@ public class CVService(IFileService _fileService,
             _logger.LogWarning("Unauthenticated attempt to retrieve CV analysis for CV ID {CvId}.", cvId);
             return new Error(ErrorCodes.UnAuthorized, "User must be authenticated to retrieve CV analysis");
         }
-        var analysis = await _context.Analyses
-            .Include(a => a.CV)
-            .ThenInclude(cv=>cv.User)
-            .OrderByDescending(a => a.Id)
-            .AsSplitQuery()
-            .FirstOrDefaultAsync(a => a.CV.UserId == currentUserId && a.CVId == cvId, cancellationToken);
+
+
+        var cacheKey =CacheKeys.CvAnalysis(cvId, currentUserId);
+        var analysis = await _cache.GetOrCreateAsync(cacheKey,
+            async _ =>
+            {
+                var a = await _context.Analyses
+                        .AsNoTracking()
+                        .Include(a => a.CV)
+                        .ThenInclude(cv => cv.User)
+                        .OrderByDescending(a => a.Id)
+                        .AsSplitQuery()
+                        .FirstOrDefaultAsync(a => a.CV.UserId == currentUserId && a.CVId == cvId, cancellationToken);
+
+                if (a is null) return null;
+                return new GetCVAnalysisResponse(
+                    a.Id,
+                    a.Score,
+                    a.Strengths.Select(s => new StrengthsDto
+                    {
+                        Icon = s.Icon,
+                        Heading = s.Heading,
+                        Description = s.Description
+                    }).ToList(),
+                    a.Weaknesses.ToList(),
+                    a.Suggestions.Select(s => new SuggestionsDto
+                    {
+                        Heading = s.Heading,
+                        Description = s.Description
+                    }).ToList(),
+                    a.CV.ShareToken.ToString(),
+                    a.CV.User.UserName ?? "Unknown",
+                    a.JobMatchPercentage,
+                    a.TechnicalAlignment,
+                    a.SoftSkillsFit,
+                    a.DomainExperience
+                );
+            },cancellationToken:cancellationToken);
+
         if (analysis is null)
         {
             _logger.LogWarning("No analysis found for CV ID {CvId} and user ID {UserId}.", cvId, currentUserId);
             return new Error(ErrorCodes.BadRequest, "No analysis found for the specified CV");
         }
-        var response = new GetCVAnalysisResponse(
-            analysis.Id,
-            analysis.Score,
-            analysis.Strengths.Select(s => new StrengthsDto 
-            {
-                Icon = s.Icon,
-                Heading = s.Heading,
-                Description = s.Description
-            }).ToList(),
-            analysis.Weaknesses.Select(w => w).ToList(),
-            analysis.Suggestions.Select(s => new SuggestionsDto
-            {
-                Heading = s.Heading,
-                Description = s.Description
-            }).ToList(),
-            analysis.CV.ShareToken.ToString(),
-            analysis.CV.User.UserName!,
-            analysis.JobMatchPercentage,
-            analysis.TechnicalAlignment,
-            analysis.SoftSkillsFit,
-            analysis.DomainExperience
-        );
-        return response;
+        _logger.LogInformation("Successfully retrieved analysis for CV ID {CvId} and user ID {UserId}.", cvId, currentUserId);
+        return analysis;
     }
     
     public async Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id,CancellationToken cancellationToken)
     {
-        var cvResponseFromDb = await _context.CVs
-            .Select(x=>new
+        var cacheKey = CacheKeys.CvReAnalysis(id);
+
+        var cvResponseFromDb = await _cache.GetOrCreateAsync(cacheKey,
+            async _ => await _context.CVs
+            .Select(x => new
             {
                 CvId = x.Id,
-                ExtractedText=x.ExtractedText,
-                JobDescription= x.Analyses.OrderByDescending(a=>a.Id).Select(a=>a.JobDescription).FirstOrDefault(),
+                ExtractedText = x.ExtractedText,
+                JobDescription = x.Analyses.OrderByDescending(a => a.Id).Select(a => a.JobDescription).FirstOrDefault(),
                 UserId = x.UserId,
                 UserName = x.User.UserName,
-                ShareToken=x.ShareToken
+                ShareToken = x.ShareToken
             })
-            .FirstOrDefaultAsync(x => x.CvId == id, cancellationToken);
+            .FirstOrDefaultAsync(x => x.CvId == id, cancellationToken),
+            cancellationToken: cancellationToken);
         if (cvResponseFromDb is null)
         {
             _logger.LogWarning("Attempt to analyze non-existent CV with ID {CvId}.", id);
@@ -238,21 +265,25 @@ public class CVService(IFileService _fileService,
         };
         await _context.Analyses.AddAsync(analysisRecord);
         await _context.SaveChangesAsync(cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.CvAnalysis(cvResponseFromDb.CvId, currentUserId), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.UserCvs(currentUserId), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.SharedCv(cvResponseFromDb.ShareToken), cancellationToken);
         _logger.LogInformation("Successfully analyzed extracted CV with ID {CvId}. Score: {Score}, Job Match: {JobMatchPercentage}",
             id, analysisResult.Score, analysisResult.JobMatchPercentage);
-        return new GetCVAnalysisResponse(
-            analysisRecord.Id,
-            analysisRecord.Score,
-            analysisResult.Strengths,
-            analysisResult.Weaknesses,
-            analysisResult.Suggestions,
-            cvResponseFromDb.ShareToken.ToString(),
-            cvResponseFromDb.UserName ?? "Unknown",
-            analysisResult.JobMatchPercentage,
-            analysisResult.TechnicalAlignment,
-            analysisResult.SoftSkillsFit,
-            analysisResult.DomainExperience
-        );
+        
+        return  new GetCVAnalysisResponse(
+                    analysisRecord.Id,
+                    analysisRecord.Score,
+                    analysisResult.Strengths,
+                    analysisResult.Weaknesses,
+                    analysisResult.Suggestions,
+                    cvResponseFromDb.ShareToken.ToString(),
+                    cvResponseFromDb.UserName ?? "Unknown",
+                    analysisResult.JobMatchPercentage,
+                    analysisResult.TechnicalAlignment,
+                    analysisResult.SoftSkillsFit,
+                    analysisResult.DomainExperience
+                );
     }
     
     public async Task<Error> DeleteCvAsync(int id, CancellationToken cancellationToken = default)
@@ -271,46 +302,53 @@ public class CVService(IFileService _fileService,
         }
         _context.CVs.Remove(cv);
         await _context.SaveChangesAsync(cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.UserCvs(currentUserId), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.CvAnalysis(cv.Id, currentUserId), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.SharedCv(cv.ShareToken), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.CvReAnalysis(id), cancellationToken);
         _logger.LogInformation("Successfully deleted CV with ID {CvId} for user ID {UserId}.", id, currentUserId);
         return new Error(ErrorCodes.None, "CV deleted successfully");
     }
    
     public async Task<OneOf<GetCVAnalysisResponse, Error>> GetByShareTokenAsync(Guid token)
     {
-        var analysis = await _context.Analyses
-            .Include(a => a.CV)
-            .ThenInclude(cv => cv.User)
-            .OrderByDescending(a => a.Id)
-            .AsSplitQuery()
-            .FirstOrDefaultAsync(a => a.CV.ShareToken == token);
+        var cacheKey =CacheKeys.SharedCv(token);
+
+        var analysis = await _cache.GetOrCreateAsync(cacheKey,
+            async _=>{
+             var a = await _context.Analyses
+                .Where(a => a.CV.ShareToken == token)
+                .Select(a=> new GetCVAnalysisResponse(
+                    a.Id,
+                    a.Score,
+                    a.Strengths.Select(s => new StrengthsDto
+                    {
+                        Icon = s.Icon,
+                        Heading = s.Heading,
+                        Description = s.Description
+                    }).ToList(),
+                    a.Weaknesses.Select(w => w).ToList(),
+                    a.Suggestions.Select(s => new SuggestionsDto
+                    {
+                        Heading = s.Heading,
+                        Description = s.Description
+                    }).ToList(),
+                    a.CV.ShareToken.ToString(),
+                    a.CV.User.UserName!,
+                    a.JobMatchPercentage,
+                    a.TechnicalAlignment,
+                    a.SoftSkillsFit,
+                    a.DomainExperience
+                ))
+                .FirstOrDefaultAsync(cancellationToken: _);
+                return a;
+        });
         if (analysis is null)
         {
             _logger.LogWarning("No analysis found for share token {Token}.", token);
             return new Error(ErrorCodes.BadRequest, "No analysis found for the specified share token");
         }
-        var response = new GetCVAnalysisResponse(
-            analysis.Id,
-            analysis.Score,
-            analysis.Strengths.Select(s => new StrengthsDto
-            {
-                Icon = s.Icon,
-                Heading = s.Heading,
-                Description = s.Description
-            }).ToList(),
-            analysis.Weaknesses.Select(w => w).ToList(),
-            analysis.Suggestions.Select(s => new SuggestionsDto
-            {
-                Heading = s.Heading,
-                Description = s.Description
-            }).ToList(),
-            analysis.CV.ShareToken.ToString(),
-            analysis.CV.User.UserName!,
-            analysis.JobMatchPercentage,
-            analysis.TechnicalAlignment,
-            analysis.SoftSkillsFit,
-            analysis.DomainExperience
-        );
-        return response;
+        return analysis;
     }
     private async Task<string> ExtractTextFromPDFAsync(Stream pdfStream)
     {

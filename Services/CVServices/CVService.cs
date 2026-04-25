@@ -165,8 +165,15 @@ public class CVService(IFileService _fileService,
             async _ =>
             {
                 var a = await _context.Analyses
-                .Where(a => a.CV.UserId == currentUserId && a.CVId == cvId)
-                .Select(a=> new GetCVAnalysisResponse(
+                        .AsNoTracking()
+                        .Include(a => a.CV)
+                        .ThenInclude(cv => cv.User)
+                        .OrderByDescending(a => a.Id)
+                        .AsSplitQuery()
+                        .FirstOrDefaultAsync(a => a.CV.UserId == currentUserId && a.CVId == cvId, cancellationToken);
+
+                if (a is null) return null;
+                return new GetCVAnalysisResponse(
                     a.Id,
                     a.Score,
                     a.Strengths.Select(s => new StrengthsDto
@@ -175,21 +182,19 @@ public class CVService(IFileService _fileService,
                         Heading = s.Heading,
                         Description = s.Description
                     }).ToList(),
-                    a.Weaknesses.Select(w => w).ToList(),
+                    a.Weaknesses.ToList(),
                     a.Suggestions.Select(s => new SuggestionsDto
                     {
                         Heading = s.Heading,
                         Description = s.Description
                     }).ToList(),
                     a.CV.ShareToken.ToString(),
-                    a.CV.User.UserName!,
+                    a.CV.User.UserName ?? "Unknown",
                     a.JobMatchPercentage,
                     a.TechnicalAlignment,
                     a.SoftSkillsFit,
                     a.DomainExperience
-                ))
-                .FirstOrDefaultAsync(cancellationToken);
-                return a;
+                );
             },cancellationToken:cancellationToken);
 
         if (analysis is null)

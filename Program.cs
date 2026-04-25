@@ -23,6 +23,7 @@ using CVAnalyzerAPI.Validators.CVValidators;
 using CVAnalyzerAPI.Services.CVServices;
 using Polly.Extensions.Http;
 using Polly;
+using Microsoft.Extensions.Caching.Hybrid;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -140,6 +141,15 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddHybridCache(options =>
+{
+    options.DefaultEntryOptions = new HybridCacheEntryOptions
+    {
+        Expiration = TimeSpan.FromHours(1),
+        LocalCacheExpiration = TimeSpan.FromMinutes(30),
+    };
+});
 
 
 

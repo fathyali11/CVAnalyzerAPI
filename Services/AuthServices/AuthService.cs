@@ -67,8 +67,8 @@ public class AuthService(
         }
 
         _logger.LogInformation("Role {Role} assigned to user {Email} successfully", UserRoles.User, request.Email);
-        var roles = await _userManager.GetRolesAsync(user);
-        var tokenCreationResult=_tokenService.CreateToken(user,roles.First());
+        
+        var tokenCreationResult=_tokenService.CreateToken(user, UserRoles.User);
 
         user.RefreshTokens.Add(new RefreshToken
         {

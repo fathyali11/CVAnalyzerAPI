@@ -82,7 +82,7 @@ public class AuthService(
         {
             Name = user.UserName,
             Email = user.Email,
-            Role = roles.First(),
+            Role = UserRoles.User,
             Token = tokenCreationResult.Token,
             Expiration = tokenCreationResult.ExpiresAt,
             RefreshToken = tokenCreationResult.RefreshToken,

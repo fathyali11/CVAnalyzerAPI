@@ -31,6 +31,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
 
         );
     }
+    [EnableRateLimiting("login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken = default)
     {
@@ -72,7 +73,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
     }
 
     [HttpPost("forgot-password")]
-    [EnableRateLimiting("ForgotPasswordPolicy")]
+    [EnableRateLimiting("ForgotPassword")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.ForgotPasswordAsync(request, cancellationToken);

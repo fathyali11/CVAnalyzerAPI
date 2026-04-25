@@ -3,6 +3,7 @@ using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
 using CVAnalyzerAPI.Services.CVServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CVAnalyzerAPI.Controllers;
 
@@ -11,6 +12,7 @@ namespace CVAnalyzerAPI.Controllers;
 [Authorize]
 public class CVsController(ICVService _cVService):ControllerBase
 {
+    [EnableRateLimiting("UploadCV")]
     [HttpPost("upload")]
     public async Task<IActionResult> UploadCV([FromForm] UploadCVRequest request, CancellationToken cancellationToken)
     {
@@ -50,6 +52,7 @@ public class CVsController(ICVService _cVService):ControllerBase
                 _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
             });
     }
+    [EnableRateLimiting("Analyze")]
     [HttpPost("{id}/reanalyze")]
     public async Task<IActionResult> ReanalyzeCV([FromRoute] int id, CancellationToken cancellationToken)
     {
@@ -76,6 +79,7 @@ public class CVsController(ICVService _cVService):ControllerBase
         };
     }
 
+    [EnableRateLimiting("public-link")]
     [AllowAnonymous]
     [HttpGet("share-analysis/{token}")]
     public async Task<IActionResult> GetSharedAnalysis(Guid token)

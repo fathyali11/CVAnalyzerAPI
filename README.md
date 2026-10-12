@@ -116,7 +116,7 @@ Contributions are welcome! Please:
 
 ## Support
 
-For questions about the API or development, feel free to reach out to the team.
+For questions about the API or development, feel free to reach out to me.
 
 ---
 

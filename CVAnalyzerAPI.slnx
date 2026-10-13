@@ -1,3 +1,4 @@
 <Solution>
-  <Project Path="CVAnalyzerAPI.csproj" />
+  <Project Path="CVAnalyzer.API/CVAnalyzerAPI.csproj" />
+  <Project Path="CVAnalyzerAPI.Tests/CVAnalyzerAPI.Tests.csproj" />
 </Solution>

@@ -69,6 +69,7 @@ dotnet restore
 dotnet build
 
 # Run the application
+cd CVAnalyzer.API
 dotnet run
 ```
 
@@ -84,22 +85,21 @@ The application uses several configuration sections in `appsettings.json`:
 
 ```bash
 # Run unit tests
-dotnet test CVAnalyzerAPI/
-
-# Run integration tests
-dotnet test CVAnalyzerAPI/IntegrationTests/
+dotnet test CVAnalyzerAPI.Tests/
 ```
 
 ## Project Structure
 
 ```
 CVAnalyzerAPI/
-├── Controllers/          # REST endpoints
-├── Services/            # Business logic (Auth, CV, Analysis)
-├── Models/              # Database entities (CV, Analysis, etc.)
-├── DTOs/                # Data transfer objects
-├── Migrations/          # Database schema migrations
-└── ...
+├── CVAnalyzer.API/        # Web API project
+│   ├── Controllers/       # REST endpoints
+│   ├── Services/          # Business logic (Auth, CV, Analysis)
+│   ├── Models/            # Database entities (CV, Analysis, etc.)
+│   ├── DTOs/              # Data transfer objects
+│   ├── Migrations/        # Database schema migrations
+│   └── ...
+└── CVAnalyzerAPI.Tests/   # Unit tests (xUnit)
 ```
 
 ## License

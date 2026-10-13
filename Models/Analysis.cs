@@ -1,4 +1,7 @@
-﻿namespace CVAnalyzerAPI.Models;
+﻿
+using System.Text.Json.Serialization;
+
+namespace CVAnalyzerAPI.Models;
 
 public class Analysis
 {
@@ -13,9 +16,9 @@ public class Analysis
     public int TechnicalAlignment { get; set; }
     public int SoftSkillsFit { get; set; }
     public int DomainExperience { get; set; }
-    public DateTime CreatedAt { get; set; }=DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    public CV CV { get; set; }=default!;
+    public CV CV { get; set; } = default!;
 }
 
 public class AnalysisStrength

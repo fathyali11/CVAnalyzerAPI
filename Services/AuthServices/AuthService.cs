@@ -4,7 +4,6 @@ using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using CVAnalyzerAPI.Models;
 using CVAnalyzerAPI.Services.EmailServices;
 using CVAnalyzerAPI.Services.TokenServices;
-using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -18,10 +17,6 @@ namespace CVAnalyzerAPI.Services.AuthServices;
 public class AuthService(
     UserManager<ApplicationUser> _userManager,
     ILogger<AuthService> _logger,
-    IValidator<RegisterRequest> _registerRequestValidator,
-    IValidator<LoginRequest> _loginRequestValidator,
-    IValidator<ForgotPasswordRequest> _forgotPasswordRequestValidator,
-    IValidator<ResetPasswordRequest> _resetPasswordRequestValidator,
     ITokenService _tokenService,
     IEmailService _emailService,
     ApplicationDbContext _context,
@@ -29,15 +24,7 @@ public class AuthService(
 {
     public async Task<OneOf<AuthResponse,Error>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Registering user with email: {Email}", request.Email);
-        var validationResult = await _registerRequestValidator.ValidateAsync(request, cancellationToken);
-        if(!validationResult.IsValid)
-        {
-            _logger.LogWarning("Validation failed for registration request: {Errors}", validationResult.Errors);
-            return new Error(ErrorCodes.BadRequest,string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage)));
-        }
-
-        if(await _userManager.Users
+       if(await _userManager.Users
             .AnyAsync(u => u.Email == request.Email || u.UserName == request.Name, cancellationToken))
         {
             _logger.LogWarning("User with email {Email} or username {Name} already exists", request.Email, request.Name);
@@ -93,13 +80,6 @@ public class AuthService(
 
     public async Task<OneOf<AuthResponse, Error>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Login user with email: {Email}", request.Email);
-        var validationResult = await _loginRequestValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            _logger.LogWarning("Validation failed for login request: {Errors}", validationResult.Errors);
-            return new Error(ErrorCodes.BadRequest, string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage)));
-        }
         var user= await _userManager.FindByEmailAsync(request.Email);
         if(user is null)
         {
@@ -211,13 +191,6 @@ public class AuthService(
 
     public async Task<OneOf<bool, Error>> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
-        var validationResult = await _forgotPasswordRequestValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            _logger.LogWarning("Validation failed for forgot password request: {Errors}", validationResult.Errors);
-            return new Error(ErrorCodes.BadRequest, string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage)));
-        }
-
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user == null)
         {
@@ -240,13 +213,6 @@ public class AuthService(
 
     public async Task<OneOf<bool, Error>> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
-        var validationResult = await _resetPasswordRequestValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            _logger.LogWarning("Validation failed for reset password request: {Errors}", validationResult.Errors);
-            return new Error(ErrorCodes.BadRequest, string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage)));
-        }
-
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user == null)
         {

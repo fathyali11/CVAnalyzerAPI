@@ -6,7 +6,6 @@ using CVAnalyzerAPI.Services.AnalyzeServices;
 using CVAnalyzerAPI.Services.AuthServices;
 using CVAnalyzerAPI.Services.FileServices;
 using Microsoft.EntityFrameworkCore;
-using FluentValidation;
 using OneOf;
 using System.Text;
 using UglyToad.PdfPig;
@@ -20,20 +19,12 @@ public class CVService(IFileService _fileService,
     IAnalyzeService _analyzeService,
     ApplicationDbContext _context,
     IAuthService _authService,
-    HybridCache _cache,
-    IValidator<UploadCVRequest> _validator
+    HybridCache _cache
     ) :ICVService
 {
     public async Task<OneOf<UploadCvResponse, Error>> UploadAndAnalysisCVAsync(UploadCVRequest request, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Received request to upload and analyze CV: {FileName}", request.File.FileName);
-        var validationResult = await _validator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            var errors = string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage));
-            _logger.LogWarning("Validation failed for CV upload: {Errors}", errors);
-            return new Error(ErrorCodes.BadRequest, $"Validation failed: {errors}");
-        }
         var currentUserId = await _authService.GetCurrentUserIdAsync(cancellationToken);
         if (currentUserId is null)
         {

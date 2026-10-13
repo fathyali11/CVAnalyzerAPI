@@ -4,6 +4,7 @@ using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.Data;
 using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
 using CVAnalyzerAPI.DTOs.AuthsDTOs;
+using CVAnalyzerAPI.Filters;
 using CVAnalyzerAPI.Middlewares;
 using CVAnalyzerAPI.Models;
 using CVAnalyzerAPI.OpenApi;
@@ -33,7 +34,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApiDependencies(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddControllers();
+        services.AddControllers(options =>
+        {
+            options.Filters.Add<ValidationFilter>();
+        });
 
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddProblemDetails();
@@ -139,6 +143,8 @@ public static class DependencyInjection
         services.AddHttpClient<IAnalyzeService, GroqService>().AddPolicyHandler(GetRetryPolicy());
         services.AddScoped<IFileService, CloudinaryService>();
         services.AddScoped<ICVService, CVService>();
+
+        services.AddScoped<ValidationFilter>();
     }
 
     private static void AddCorsPolicy(IServiceCollection services)

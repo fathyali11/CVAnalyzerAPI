@@ -104,7 +104,9 @@ builder.Services.AddScoped<IFileService, CloudinaryService>();
 builder.Services.AddScoped<ICVService, CVService>();
 
 builder.Services.AddOptions<EmailSettings>()
-    .Bind(builder.Configuration.GetSection(nameof(EmailSettings)));
+    .Bind(builder.Configuration.GetSection(nameof(EmailSettings)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddCors(options =>
 {

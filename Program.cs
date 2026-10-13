@@ -24,6 +24,9 @@ using CVAnalyzerAPI.Services.CVServices;
 using Polly.Extensions.Http;
 using Polly;
 using Microsoft.Extensions.Caching.Hybrid;
+using CVAnalyzerAPI;
+using CVAnalyzerAPI.OpenApi;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,7 +42,10 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+});
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -223,6 +229,7 @@ app.UseCors("CVAnalyzerPolicy");
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseSerilogRequestLogging();

@@ -1,3 +1,4 @@
+using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using CVAnalyzerAPI.Validators.AuthValidators;
 using Shouldly;
@@ -8,12 +9,6 @@ public class LoginRequestValidatorTests
 {
     private const string ValidEmail = "user@example.com";
     private const string ValidPassword = "Str0ng@Pass";
-
-    private const string EmailRequired = "Email is required.";
-    private const string EmailInvalidFormat = "Invalid email format.";
-    private const string PasswordRequired = "Password is required.";
-    private const string PasswordTooShort = "Password must be at least 8 characters long.";
-    private const string PasswordTooWeak = "Password must contain at least one uppercase letter, one lowercase letter, one number and one special character.";
 
     private readonly LoginRequestValidator _validator = new();
 
@@ -27,30 +22,30 @@ public class LoginRequestValidatorTests
     }
 
     [Theory]
-    [InlineData("", new[] { EmailRequired, EmailInvalidFormat })]
-    [InlineData("not-an-email", new[] { EmailInvalidFormat })]
-    public void Validate_InvalidEmail_ShouldFail(string email, string[] expectedMessages)
+    [InlineData("", new[] { ValidationCodes.Required, ValidationCodes.InvalidFormat })]
+    [InlineData("not-an-email", new[] { ValidationCodes.InvalidFormat })]
+    public void Validate_InvalidEmail_ShouldFail(string email, string[] expectedCodes)
     {
         var result = _validator.Validate(new LoginRequest(email, ValidPassword));
 
         result.IsValid.ShouldBeFalse();
         result.Errors
-            .Select(e => (e.PropertyName, e.ErrorMessage))
-            .ShouldBe(ErrorsFor(nameof(LoginRequest.Email), expectedMessages), ignoreOrder: true);
+            .Select(e => (e.PropertyName, e.ErrorCode))
+            .ShouldBe(ErrorsFor(nameof(LoginRequest.Email), expectedCodes), ignoreOrder: true);
     }
 
     [Theory]
-    [InlineData("", new[] { PasswordRequired, PasswordTooShort, PasswordTooWeak })]
-    [InlineData("Ab1@xy", new[] { PasswordTooShort, PasswordTooWeak })]
-    [InlineData("alllowercase", new[] { PasswordTooWeak })]
-    public void Validate_InvalidPassword_ShouldFail(string password, string[] expectedMessages)
+    [InlineData("", new[] { ValidationCodes.Required, ValidationCodes.TooShort, ValidationCodes.TooWeak })]
+    [InlineData("Ab1@xy", new[] { ValidationCodes.TooShort, ValidationCodes.TooWeak })]
+    [InlineData("alllowercase", new[] { ValidationCodes.TooWeak })]
+    public void Validate_InvalidPassword_ShouldFail(string password, string[] expectedCodes)
     {
         var result = _validator.Validate(new LoginRequest(ValidEmail, password));
 
         result.IsValid.ShouldBeFalse();
         result.Errors
-            .Select(e => (e.PropertyName, e.ErrorMessage))
-            .ShouldBe(ErrorsFor(nameof(LoginRequest.Password), expectedMessages), ignoreOrder: true);
+            .Select(e => (e.PropertyName, e.ErrorCode))
+            .ShouldBe(ErrorsFor(nameof(LoginRequest.Password), expectedCodes), ignoreOrder: true);
     }
 
     [Fact]
@@ -63,7 +58,7 @@ public class LoginRequestValidatorTests
         result.Errors.ShouldContain(e => e.PropertyName == nameof(LoginRequest.Password));
     }
 
-    private static IEnumerable<(string PropertyName, string ErrorMessage)> ErrorsFor(
-        string propertyName, IEnumerable<string> messages) =>
-        messages.Select(message => (propertyName, message));
+    private static IEnumerable<(string PropertyName, string ErrorCode)> ErrorsFor(
+        string propertyName, IEnumerable<string> codes) =>
+        codes.Select(code => (propertyName, code));
 }

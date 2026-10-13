@@ -1,3 +1,4 @@
+﻿using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using FluentValidation;
 
@@ -8,16 +9,16 @@ public class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequ
     public ResetPasswordRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required.")
-            .EmailAddress().WithMessage("Invalid email format.");
+            .NotEmpty().WithErrorCode(ValidationCodes.Required)
+            .EmailAddress().WithErrorCode(ValidationCodes.InvalidFormat);
 
         RuleFor(x => x.Token)
-            .NotEmpty().WithMessage("Token is required.");
+            .NotEmpty().WithErrorCode(ValidationCodes.Required);
 
         RuleFor(x => x.NewPassword)
-            .NotEmpty().WithMessage("Password is required.")
-            .MinimumLength(8).WithMessage("Password must be at least 8 characters long.")
+            .NotEmpty().WithErrorCode(ValidationCodes.Required)
+            .MinimumLength(8).WithErrorCode(ValidationCodes.TooShort)
             .Matches(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$")
-            .WithMessage("Password must contain at least one uppercase letter, one lowercase letter, one number and one special character.");
+            .WithErrorCode(ValidationCodes.TooWeak);
     }
 }

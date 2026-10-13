@@ -29,14 +29,14 @@ public class ValidationFilter(ILogger<ValidationFilter> _logger) : IAsyncActionF
                     argumentType.Name,
                     context.HttpContext.Request.Method,
                     context.HttpContext.Request.Path,
-                    string.Join("; ", validationResult.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+                    string.Join("; ", validationResult.Errors.Select(e => $"{e.PropertyName}: {e.ErrorCode}")));
 
                 context.Result = new BadRequestObjectResult(new
                 {
                     message = "Validation failed",
                     errors = validationResult.Errors
                         .GroupBy(e => e.PropertyName)
-                        .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray())
+                        .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorCode).ToArray())
                 });
                 return;
             }

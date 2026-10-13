@@ -1,4 +1,5 @@
-﻿using CVAnalyzerAPI.DTOs.AuthsDTOs;
+﻿using CVAnalyzerAPI.Consts;
+using CVAnalyzerAPI.DTOs.AuthsDTOs;
 using FluentValidation;
 
 namespace CVAnalyzerAPI.Validators.AuthValidators;
@@ -8,18 +9,17 @@ public class RegisterRequestValidator:AbstractValidator<RegisterRequest>
     public RegisterRequestValidator()
     {
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Name is required.")
-            .MaximumLength(100).WithMessage("Name must not exceed 100 characters.");
+            .NotEmpty().WithErrorCode(ValidationCodes.Required)
+            .MaximumLength(100).WithErrorCode(ValidationCodes.TooLong);
 
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required.")
-            .EmailAddress().WithMessage("Invalid email format.");
+            .NotEmpty().WithErrorCode(ValidationCodes.Required)
+            .EmailAddress().WithErrorCode(ValidationCodes.InvalidFormat);
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Password is required.")
-            .MinimumLength(8).WithMessage("Password must be at least 8 characters long.")
+            .NotEmpty().WithErrorCode(ValidationCodes.Required)
+            .MinimumLength(8).WithErrorCode(ValidationCodes.TooShort)
             .Matches(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$")
-            .WithMessage("Password must contain at least one uppercase letter, one lowercase letter, one number and one special character.");
-
+            .WithErrorCode(ValidationCodes.TooWeak);
     }
 }

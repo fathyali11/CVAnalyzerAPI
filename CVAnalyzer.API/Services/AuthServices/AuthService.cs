@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OneOf;
+using System.Runtime.Intrinsics.Arm;
 using System.Security.Claims;
 using System.Text;
 
@@ -74,10 +75,9 @@ public class AuthService(
         _logger.LogInformation("Role {Role} assigned to user {Email} successfully", UserRoles.User, request.Email);
         
         var tokenCreationResult=_tokenService.CreateToken(user, UserRoles.User);
-
         user.RefreshTokens.Add(new RefreshToken
         {
-            Token = tokenCreationResult.RefreshToken,
+            Token = RefreshTokenHasher.Hash(tokenCreationResult.RefreshToken),
             ExpiresAt = tokenCreationResult.RefreshTokenExpiresAt
         });
         await _context.SaveChangesAsync(cancellationToken);
@@ -142,7 +142,7 @@ public class AuthService(
         }
         user.RefreshTokens.Add(new RefreshToken
         {
-            Token = tokenCreationResult.RefreshToken,
+            Token = RefreshTokenHasher.Hash(tokenCreationResult.RefreshToken),
             ExpiresAt = tokenCreationResult.RefreshTokenExpiresAt
         });
 
@@ -155,9 +155,9 @@ public class AuthService(
             Email = user.Email!,
             Role = role,
             Token = tokenCreationResult.Token,
-            Expiration = tokenCreationResult.ExpiresAt,
             RefreshToken = tokenCreationResult.RefreshToken,
-            RefreshTokenExpiration = tokenCreationResult.RefreshTokenExpiresAt
+            RefreshTokenExpiration = tokenCreationResult.RefreshTokenExpiresAt,
+            Expiration = tokenCreationResult.ExpiresAt
         };
     }
     
@@ -198,7 +198,7 @@ public class AuthService(
             return new Error(ErrorCodes.NotFound, "User not found");
         }
         var refreshTokenFromDb= await _context.RefreshTokens
-            .FirstOrDefaultAsync(rt => rt.Token == refreshToken && rt.UserId == user.Id, cancellationToken);
+            .FirstOrDefaultAsync(rt => rt.Token == RefreshTokenHasher.Hash(refreshToken) && rt.UserId == user.Id, cancellationToken);
         if (refreshTokenFromDb is null)
         {
             _logger.LogWarning("Refresh token not found in database for user with email {Email}", email);
@@ -236,7 +236,7 @@ public class AuthService(
         var tokenCreationResult = _tokenService.CreateToken(user, role);
         user.RefreshTokens.Add(new RefreshToken
         {
-            Token = tokenCreationResult.RefreshToken,
+            Token = RefreshTokenHasher.Hash(tokenCreationResult.RefreshToken),
             ExpiresAt = tokenCreationResult.RefreshTokenExpiresAt
         });
         await _context.SaveChangesAsync(cancellationToken);
@@ -246,9 +246,9 @@ public class AuthService(
             Email = user.Email!,
             Role = role,
             Token = tokenCreationResult.Token,
-            Expiration = tokenCreationResult.ExpiresAt,
             RefreshToken = tokenCreationResult.RefreshToken,
-            RefreshTokenExpiration = tokenCreationResult.RefreshTokenExpiresAt
+            RefreshTokenExpiration = tokenCreationResult.RefreshTokenExpiresAt, 
+            Expiration = tokenCreationResult.ExpiresAt
         };
     }
 

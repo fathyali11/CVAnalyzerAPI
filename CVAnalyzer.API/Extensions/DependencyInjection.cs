@@ -145,7 +145,9 @@ public static class DependencyInjection
 
     private static void AddApplicationServices(IServiceCollection services)
     {
-        services.AddScoped<ITokenService, TokenService>();
+        // Stateless and depends only on IOptions<JwtSettings>, so a singleton lets the
+        // eagerly-derived signing key/credentials be reused across all requests.
+        services.AddSingleton<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator>();
         services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();

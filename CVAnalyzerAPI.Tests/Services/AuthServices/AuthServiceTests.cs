@@ -143,9 +143,6 @@ public class AuthServiceTests : IDisposable
         response.Role.ShouldBe(UserRoles.User);
         response.Token.ShouldBe("access-token");
         response.Expiration.ShouldBe(tokenResult.ExpiresAt);
-        response.RefreshToken.ShouldBe("refresh-token");
-        response.RefreshTokenExpiration.ShouldBe(tokenResult.RefreshTokenExpiresAt);
-
         await _userManager.Received(1).AddToRoleAsync(
             Arg.Is<ApplicationUser>(u => u.UserName == "john" && u.Email == "john@example.com" && u.LockoutEnabled),
             UserRoles.User);
@@ -229,7 +226,7 @@ public class AuthServiceTests : IDisposable
         var user = new ApplicationUser { Email = "john@example.com", UserName = "john" };
         _userManager.FindByEmailAsync(user.Email).Returns(user);
         _userManager.CheckPasswordAsync(user, "Str0ng@Pass").Returns(true);
-        _userManager.GetRolesAsync(user).Returns(new List<string> { UserRoles.User });
+        _userManager.GetRolesAsync(user).Returns([UserRoles.User]);
 
         var tokenResult = new TokenCreationResult
         {
@@ -247,9 +244,8 @@ public class AuthServiceTests : IDisposable
         response.Email.ShouldBe("john@example.com");
         response.Role.ShouldBe(UserRoles.User);
         response.Token.ShouldBe("access-token");
-        response.RefreshToken.ShouldBe("refresh-token");
         user.RefreshTokens.ShouldHaveSingleItem()
-            .Token.ShouldBe("refresh-token");
+            .Token.ShouldBe(RefreshTokenHasher.Hash("refresh-token"));
         await _userManager.Received(1).ResetAccessFailedCountAsync(user);
     }
 
@@ -379,15 +375,14 @@ public class AuthServiceTests : IDisposable
 
         var response = ShouldBeSuccess(result);
         response.Token.ShouldBe("new-access-token");
-        response.RefreshToken.ShouldBe("new-refresh-token");
         response.Role.ShouldBe(UserRoles.User);
 
         var oldToken = await _context.RefreshTokens.AsNoTracking()
-            .SingleAsync(rt => rt.Token == "active-refresh-token");
+            .SingleAsync(rt => rt.Token == RefreshTokenHasher.Hash("active-refresh-token"));
         oldToken.RevokedAt.ShouldNotBeNull();
 
         var newToken = await _context.RefreshTokens.AsNoTracking()
-            .SingleAsync(rt => rt.Token == "new-refresh-token");
+            .SingleAsync(rt => rt.Token == RefreshTokenHasher.Hash("new-refresh-token"));
         newToken.UserId.ShouldBe(user.Id);
         newToken.IsActive.ShouldBeTrue();
     }
@@ -561,7 +556,9 @@ public class AuthServiceTests : IDisposable
     {
         var refreshToken = new RefreshToken
         {
-            Token = token,
+            // Refresh tokens are persisted hashed, so store the hash of the raw
+            // token the client would present.
+            Token = RefreshTokenHasher.Hash(token),
             UserId = user.Id,
             User = user,
             ExpiresAt = expiresAt ?? DateTime.UtcNow.AddDays(7),

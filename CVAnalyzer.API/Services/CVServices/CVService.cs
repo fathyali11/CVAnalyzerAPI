@@ -373,10 +373,6 @@ public class CVService(IFileService _fileService,
         }
     }
 
-    // Maps the LLM result onto a new Analysis entity. Shared by upload and re-analysis so the
-    // field mapping can't drift between the two paths. Guards against LLM responses that omit
-    // collections (STJ leaves missing positional record params null) and against out-of-range
-    // scores (the DB requires Score in (0, 100]).
     private static Analysis BuildAnalysis(CvAnalysisResult result, string? jobDescription) => new()
     {
         Score = Math.Clamp(result.Score, 1, 100),
@@ -399,7 +395,6 @@ public class CVService(IFileService _fileService,
         JobDescription = jobDescription
     };
 
-    // EF materialization target for the re-analysis query (cached by CV id + user id).
     private sealed record ReAnalysisSource(
         int CvId,
         string ExtractedText,
@@ -407,8 +402,6 @@ public class CVService(IFileService _fileService,
         string? UserName,
         Guid ShareToken);
 
-    // Maps the LLM result into the API response shape (used by the re-analysis path, which
-    // returns freshly produced analysis rather than a row re-read from the database).
     private static GetCVAnalysisResponse ToResponse(CvAnalysisResult r, int id, Guid shareToken, string? userName) => new(
         id,
         Math.Clamp(r.Score, 1, 100),

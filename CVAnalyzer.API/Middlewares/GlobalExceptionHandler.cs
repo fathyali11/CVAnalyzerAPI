@@ -20,8 +20,6 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IHos
         {
             Status = (int)HttpStatusCode.InternalServerError,
             Title = "Server error",
-            // Never leak internal exception details to clients outside Development;
-            // the full exception (with stack trace) is always captured by the logger above.
             Detail = environment.IsDevelopment()
                 ? exception.Message
                 : "An unexpected error occurred."

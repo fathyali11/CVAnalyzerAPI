@@ -4,14 +4,9 @@ using System.Net;
 
 namespace CVAnalyzerAPI.Middlewares;
 
-public class GlobalExceptionHandler : IExceptionHandler
+public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IHostEnvironment environment) : IExceptionHandler
 {
-    private readonly ILogger<GlobalExceptionHandler> _logger;
-
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<GlobalExceptionHandler> _logger = logger;
 
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -25,7 +20,11 @@ public class GlobalExceptionHandler : IExceptionHandler
         {
             Status = (int)HttpStatusCode.InternalServerError,
             Title = "Server error",
-            Detail = exception.Message
+            // Never leak internal exception details to clients outside Development;
+            // the full exception (with stack trace) is always captured by the logger above.
+            Detail = environment.IsDevelopment()
+                ? exception.Message
+                : "An unexpected error occurred."
         };
 
         httpContext.Response.StatusCode = problemDetails.Status.Value;

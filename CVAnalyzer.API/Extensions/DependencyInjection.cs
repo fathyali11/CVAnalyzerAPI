@@ -75,6 +75,15 @@ public static class DependencyInjection
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
+
+        // Account lockout: without this, repeated password guessing is only bounded by
+        // the IP rate limit, which a distributed attacker walks straight past.
+        services.Configure<IdentityOptions>(options =>
+        {
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+            options.Lockout.AllowedForNewUsers = true;
+        });
     }
 
     private static void AddSettings(IServiceCollection services, IConfiguration configuration)
@@ -101,6 +110,11 @@ public static class DependencyInjection
 
         services.AddOptions<EmailSettings>()
             .Bind(configuration.GetSection(nameof(EmailSettings)))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<FrontendSettings>()
+            .Bind(configuration.GetSection(nameof(FrontendSettings)))
             .ValidateDataAnnotations()
             .ValidateOnStart();
     }

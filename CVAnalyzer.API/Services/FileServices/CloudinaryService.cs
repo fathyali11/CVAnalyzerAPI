@@ -41,10 +41,10 @@ public class CloudinaryService : IFileService
         if (result.Error != null)
         {
             _logger.LogError("Cloudinary upload failed: {Error}", result.Error.Message);
-            throw new Exception($"Image upload failed: {result.Error.Message}");
+            throw new FileServiceException($"File upload failed: {result.Error.Message}");
         }
 
-        _logger.LogInformation("Image uploaded successfully to Cloudinary");
+        _logger.LogInformation("File uploaded successfully to Cloudinary");
 
         return (result.SecureUrl.ToString(), result.PublicId);
     }
@@ -59,11 +59,11 @@ public class CloudinaryService : IFileService
 
         if (result.Result == "ok")
         {
-            _logger.LogInformation("Image deleted from Cloudinary");
+            _logger.LogInformation("File deleted from Cloudinary");
             return true;
         }
 
-        _logger.LogWarning("Failed to delete image from Cloudinary");
+        _logger.LogWarning("Failed to delete file from Cloudinary");
         return false;
     }
 }

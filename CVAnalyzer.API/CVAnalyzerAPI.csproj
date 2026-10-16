@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Update="Templates\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CloudinaryDotNet" Version="1.29.3" />
     <PackageReference Include="FluentValidation" Version="8.3.0" />
     <PackageReference Include="MailKit" Version="4.18.1" />
@@ -34,6 +38,7 @@
     <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
 </Project>

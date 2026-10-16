@@ -13,5 +13,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     {
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
         base.OnModelCreating(builder);
+
+        // Identity ships a unique index for NormalizedUserName but a *non-unique* one for
+        // NormalizedEmail, so two concurrent registrations (or addresses differing only by
+        // case) could both be inserted. This closes that race at the database level.
+        builder.Entity<ApplicationUser>()
+            .HasIndex(u => u.NormalizedEmail)
+            .IsUnique();
     }
 }

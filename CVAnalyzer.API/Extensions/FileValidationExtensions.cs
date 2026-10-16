@@ -6,7 +6,6 @@ namespace CVAnalyzerAPI.Extensions;
 public static class FileValidationExtensions
 {
     private static readonly byte[] PdfSignature = { 0x25, 0x50, 0x44, 0x46 }; 
-    private static readonly byte[] DocxSignature = { 0x50, 0x4B, 0x03, 0x04 };
 
     public static bool IsValidDocumentSignature(this IFormFile file)
     {
@@ -39,9 +38,6 @@ public static class FileValidationExtensions
 
         if (ext == ".pdf")
             return headerBytes.SequenceEqual(PdfSignature);
-
-        if (ext == ".docx")
-            return headerBytes.SequenceEqual(DocxSignature);
 
         return false;
     }

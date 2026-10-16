@@ -11,7 +11,7 @@ namespace CVAnalyzerAPI.Services.AnalyzeServices;
 public class GeminiService(HttpClient _httpClient,IOptions<GeminiSettings> options) : IAnalyzeService
 {
     private readonly GeminiSettings _settings = options.Value;
-    public async Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeCVAsync(string cvText, string? jobDescription = null)
+    public async Task<OneOf<CvAnalysisResult, Error>> AnalyzeCVAsync(string cvText, string? jobDescription = null, CancellationToken cancellationToken = default)
     {
         var prompt = BuildPrompt(cvText, jobDescription);
 
@@ -29,15 +29,15 @@ public class GeminiService(HttpClient _httpClient,IOptions<GeminiSettings> optio
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync($"{_settings.Url}?key={_settings.ApiKey}", content);
+        var response = await _httpClient.PostAsync($"{_settings.Url}?key={_settings.ApiKey}", content, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            var error = await response.Content.ReadAsStringAsync();
+            var error = await response.Content.ReadAsStringAsync(cancellationToken);
             return new Error(ErrorCodes.BadRequest, $"Gemini API returned status code {response.StatusCode}: {error}");
         }
 
-        var responseString = await response.Content.ReadAsStringAsync();
+        var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
 
         using var jsonDocument = JsonDocument.Parse(responseString);
         var resultText = jsonDocument.RootElement
@@ -48,7 +48,7 @@ public class GeminiService(HttpClient _httpClient,IOptions<GeminiSettings> optio
             .GetString();
 
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var analysisResult = JsonSerializer.Deserialize<GetCVAnalysisResponse>(resultText!, options);
+        var analysisResult = JsonSerializer.Deserialize<CvAnalysisResult>(resultText!, options);
 
         return analysisResult is not null ? analysisResult : new Error(ErrorCodes.BadRequest, "Failed to parse Gemini API response into CvAnalysisResult");
     }

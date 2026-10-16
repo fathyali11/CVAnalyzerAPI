@@ -21,14 +21,14 @@ public class Analysis
     public CV CV { get; set; } = default!;
 }
 
-public class AnalysisStrength
+public record AnalysisStrength
 {
     public string Icon { get; set; } = null!;
     public string Heading { get; set; } = null!;
     public string Description { get; set; } = null!;
 }
 
-public class AnalysisSuggestion
+public record AnalysisSuggestion
 {
     public string Heading { get; set; } = null!;
     public string Description { get; set; } = null!;

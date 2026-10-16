@@ -17,7 +17,7 @@ namespace CVAnalyzerAPI.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.6")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -134,6 +134,7 @@ namespace CVAnalyzerAPI.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedEmail")
+                        .IsUnique()
                         .HasDatabaseName("EmailIndex");
 
                     b.HasIndex("NormalizedUserName")
@@ -162,6 +163,10 @@ namespace CVAnalyzerAPI.Migrations
 
                     b.Property<string>("FilePath")
                         .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("FilePublicId")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 

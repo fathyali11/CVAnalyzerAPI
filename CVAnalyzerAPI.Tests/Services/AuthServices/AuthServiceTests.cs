@@ -7,12 +7,15 @@ using CVAnalyzerAPI.Models;
 using CVAnalyzerAPI.Services.AuthServices;
 using CVAnalyzerAPI.Services.EmailServices;
 using CVAnalyzerAPI.Services.TokenServices;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using NSubstitute;
 using OneOf;
 using Shouldly;
@@ -45,9 +48,6 @@ public class AuthServiceTests : IDisposable
         _emailService = Substitute.For<IEmailService>();
         _httpContextAccessor = Substitute.For<IHttpContextAccessor>();
 
-        // SQLite in-memory keeps the database alive only while the connection is open,
-        // and unlike the EF InMemory provider it supports relational features used by
-        // the service (e.g. ExecuteDeleteAsync).
         _database = new SqliteConnection("DataSource=:memory:");
         _database.Open();
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -56,9 +56,10 @@ public class AuthServiceTests : IDisposable
         _context = new ApplicationDbContext(options);
         _context.Database.EnsureCreated();
 
-        // AnyAsync requires an IAsyncQueryProvider, so back the substitute
-        // with the real (InMemory) Users set instead of a LINQ-to-objects queryable.
-        _userManager.Users.Returns(_context.Users);
+       _userManager.Users.Returns(_context.Users);
+
+        var webHostEnvironment = Substitute.For<IWebHostEnvironment>();
+        webHostEnvironment.ContentRootPath.Returns(AppContext.BaseDirectory);
 
         _sut = new AuthService(
             _userManager,
@@ -66,7 +67,9 @@ public class AuthServiceTests : IDisposable
             _tokenService,
             _emailService,
             _context,
-            _httpContextAccessor);
+            _httpContextAccessor,
+            webHostEnvironment,
+            Options.Create(new FrontendSettings { BaseUrl = "http://localhost:4200" }));
     }
 
     public void Dispose()
@@ -144,20 +147,22 @@ public class AuthServiceTests : IDisposable
         response.RefreshTokenExpiration.ShouldBe(tokenResult.RefreshTokenExpiresAt);
 
         await _userManager.Received(1).AddToRoleAsync(
-            Arg.Is<ApplicationUser>(u => u.UserName == "john" && u.Email == "john@example.com"),
+            Arg.Is<ApplicationUser>(u => u.UserName == "john" && u.Email == "john@example.com" && u.LockoutEnabled),
             UserRoles.User);
     }
 
     // --- LoginAsync ---
 
     [Fact]
-    public async Task LoginAsync_UnknownEmail_ReturnsNotFoundError()
+    public async Task LoginAsync_UnknownEmail_ReturnsSameErrorAsWrongPassword()
     {
         _userManager.FindByEmailAsync("ghost@example.com").Returns((ApplicationUser?)null);
 
         var result = await _sut.LoginAsync(new LoginRequest("ghost@example.com", "Str0ng@Pass"));
 
-        ShouldBeError(result, ErrorCodes.NotFound, "User not found");
+        // Deliberately identical to the wrong-password response: a different status code here
+        // would let an attacker enumerate which emails are registered.
+        ShouldBeError(result, ErrorCodes.UnAuthorized, "Invalid credentials");
         await _userManager.DidNotReceive().CheckPasswordAsync(Arg.Any<ApplicationUser>(), Arg.Any<string>());
         _tokenService.DidNotReceive().CreateToken(Arg.Any<ApplicationUser>(), Arg.Any<string>());
     }
@@ -172,6 +177,21 @@ public class AuthServiceTests : IDisposable
         var result = await _sut.LoginAsync(new LoginRequest("john@example.com", "wrong-password"));
 
         ShouldBeError(result, ErrorCodes.UnAuthorized, "Invalid credentials");
+        await _userManager.Received(1).AccessFailedAsync(user);
+        _tokenService.DidNotReceive().CreateToken(Arg.Any<ApplicationUser>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task LoginAsync_LockedOutAccount_ReturnsUnauthorizedErrorWithoutCheckingPassword()
+    {
+        var user = new ApplicationUser { Email = "john@example.com", UserName = "john" };
+        _userManager.FindByEmailAsync(user.Email).Returns(user);
+        _userManager.IsLockedOutAsync(user).Returns(true);
+
+        var result = await _sut.LoginAsync(new LoginRequest("john@example.com", "Str0ng@Pass"));
+
+        ShouldBeError(result, ErrorCodes.UnAuthorized, "Invalid credentials");
+        await _userManager.DidNotReceive().CheckPasswordAsync(Arg.Any<ApplicationUser>(), Arg.Any<string>());
         _tokenService.DidNotReceive().CreateToken(Arg.Any<ApplicationUser>(), Arg.Any<string>());
     }
 
@@ -230,6 +250,7 @@ public class AuthServiceTests : IDisposable
         response.RefreshToken.ShouldBe("refresh-token");
         user.RefreshTokens.ShouldHaveSingleItem()
             .Token.ShouldBe("refresh-token");
+        await _userManager.Received(1).ResetAccessFailedCountAsync(user);
     }
 
     // --- RefreshTokenAsync ---
@@ -251,6 +272,17 @@ public class AuthServiceTests : IDisposable
         _tokenService.GetPrincipalFromExpiredToken("bad-token").Returns((ClaimsPrincipal?)null);
 
         var result = await _sut.RefreshTokenAsync("bad-token", "refresh-token");
+
+        ShouldBeError(result, ErrorCodes.BadRequest, "Invalid token");
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_MalformedAccessToken_ReturnsBadRequestErrorInsteadOfThrowing()
+    {
+        _tokenService.GetPrincipalFromExpiredToken("garbage-token")
+            .Returns(_ => throw new SecurityTokenMalformedException("malformed"));
+
+        var result = await _sut.RefreshTokenAsync("garbage-token", "refresh-token");
 
         ShouldBeError(result, ErrorCodes.BadRequest, "Invalid token");
     }
@@ -369,7 +401,7 @@ public class AuthServiceTests : IDisposable
 
         var result = await _sut.ForgotPasswordAsync(new ForgotPasswordRequest("ghost@example.com"));
 
-        ShouldBeTrueWithoutError(result);
+        ShouldBeNoError(result);
         await _emailService.DidNotReceiveWithAnyArgs()
             .SendEmailAsync(default!, default!, default!, default);
     }
@@ -383,14 +415,15 @@ public class AuthServiceTests : IDisposable
 
         var result = await _sut.ForgotPasswordAsync(new ForgotPasswordRequest("john@example.com"));
 
-        ShouldBeTrueWithoutError(result);
+        ShouldBeNoError(result);
 
         var expectedEncodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("reset-token"));
         await _emailService.Received(1).SendEmailAsync(
             "john@example.com",
             "Reset Password",
             Arg.Is<string>(body =>
-                body.Contains($"http://localhost:4200/auth/reset-password?email={user.Email}&token={expectedEncodedToken}")
+                body.Contains("http://localhost:4200/auth/reset-password")
+                && body.Contains($"token={expectedEncodedToken}")
                 && body.Contains("john")
                 && !body.Contains("{{")),
             Arg.Any<CancellationToken>());
@@ -436,8 +469,38 @@ public class AuthServiceTests : IDisposable
         var result = await _sut.ResetPasswordAsync(
             new ResetPasswordRequest("john@example.com", EncodeToken("reset-token"), "NewStr0ng@Pass"));
 
-        ShouldBeTrueWithoutError(result);
+        ShouldBeNoError(result);
         await _userManager.Received(1).ResetPasswordAsync(user, "reset-token", "NewStr0ng@Pass");
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_MalformedToken_ReturnsBadRequestError()
+    {
+        var user = new ApplicationUser { Email = "john@example.com", UserName = "john" };
+        _userManager.FindByEmailAsync(user.Email).Returns(user);
+
+        var result = await _sut.ResetPasswordAsync(
+            new ResetPasswordRequest("john@example.com", "not-valid-base64!!", "NewStr0ng@Pass"));
+
+        ShouldBeError(result, ErrorCodes.BadRequest, "Invalid request");
+        await _userManager.DidNotReceiveWithAnyArgs()
+            .ResetPasswordAsync(default!, default!, default!);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ValidRequest_RevokesAllExistingRefreshTokens()
+    {
+        var user = await SeedUserAsync(id: "user-1", email: "john@example.com", userName: "john");
+        await SeedRefreshTokenAsync(user, "stolen-refresh-token");
+        _userManager.FindByEmailAsync(user.Email!).Returns(user);
+        _userManager.ResetPasswordAsync(user, "reset-token", "NewStr0ng@Pass")
+            .Returns(IdentityResult.Success);
+
+        var result = await _sut.ResetPasswordAsync(
+            new ResetPasswordRequest(user.Email!, EncodeToken("reset-token"), "NewStr0ng@Pass"));
+
+        ShouldBeNoError(result);
+        (await _context.RefreshTokens.CountAsync()).ShouldBe(0);
     }
 
     // --- GetCurrentUserIdAsync ---
@@ -529,21 +592,13 @@ public class AuthServiceTests : IDisposable
         return error;
     }
 
-    private static Error ShouldBeError(OneOf<bool, Error> result, string code, string message)
-    {
-        result.TryPickT1(out var error, out _).ShouldBeTrue("expected an error result but got a success result");
-        error!.Code.ShouldBe(code);
-        error.Message.ShouldBe(message);
-        return error;
-    }
 
-    private static void ShouldBeTrueWithoutError(OneOf<bool, Error> result)
+    private static Error ShouldBeNoError(Error result)
     {
-        var failureMessage = result.TryPickT1(out var failure, out _)
-            ? $"expected true but got error {failure.Code}: {failure.Message}"
-            : "expected a boolean result";
-        result.TryPickT0(out var value, out _).ShouldBeTrue(failureMessage);
-        value.ShouldBeTrue();
+        result.Code.ShouldBe(
+            ErrorCodes.None,
+            $"expected success but got error {result.Code}: {result.Message}");
+        return result;
     }
 
     private static string DescribeFailure(OneOf<AuthResponse, Error> result) =>

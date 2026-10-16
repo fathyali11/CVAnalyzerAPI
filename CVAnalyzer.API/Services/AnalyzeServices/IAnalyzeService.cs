@@ -6,5 +6,5 @@ namespace CVAnalyzerAPI.Services.AnalyzeServices;
 
 public interface IAnalyzeService
 {
-    Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeCVAsync(string cvText, string? jobDescription = null);
+    Task<OneOf<CvAnalysisResult, Error>> AnalyzeCVAsync(string cvText, string? jobDescription = null, CancellationToken cancellationToken = default);
 }

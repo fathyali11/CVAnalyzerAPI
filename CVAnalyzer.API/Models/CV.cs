@@ -6,9 +6,10 @@ public class CV
     public string UserId { get; set; }=null!;
     public string FileName { get; set; }=null!;
     public string FilePath { get; set; }=null!;
+    public string? FilePublicId { get; set; }
     public string ExtractedText { get; set; }=null!;
     public DateTime UploadedAt { get; set; }=DateTime.UtcNow;
-    public Guid ShareToken = Guid.NewGuid();
+    public Guid ShareToken { get; set; } = Guid.NewGuid();
 
     public ApplicationUser User { get; set; }=default!;
     public ICollection<Analysis> Analyses { get; set; } = [];

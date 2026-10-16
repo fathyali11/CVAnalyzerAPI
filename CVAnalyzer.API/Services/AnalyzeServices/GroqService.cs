@@ -12,7 +12,7 @@ public class GroqService(HttpClient _httpClient, IOptions<GroqSettings> options)
 {
     private readonly GroqSettings _settings = options.Value;
 
-    public async Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeCVAsync(string cvText, string? jobDescription = null)
+    public async Task<OneOf<CvAnalysisResult, Error>> AnalyzeCVAsync(string cvText, string? jobDescription = null, CancellationToken cancellationToken = default)
     {
         var prompt = BuildPrompt(cvText, jobDescription);
 
@@ -33,15 +33,15 @@ public class GroqService(HttpClient _httpClient, IOptions<GroqSettings> options)
 
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
         Console.WriteLine($"Sending request to Groq API at Url: {_settings.Url} with model {_settings.Model}");
-        var response = await _httpClient.PostAsync(_settings.Url, content);
+        var response = await _httpClient.PostAsync(_settings.Url, content, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            var error = await response.Content.ReadAsStringAsync();
+            var error = await response.Content.ReadAsStringAsync(cancellationToken);
             return new Error(ErrorCodes.BadRequest, $"Groq API returned status code {response.StatusCode}: {error}");
         }
 
-        var responseString = await response.Content.ReadAsStringAsync();
+        var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
 
         try
         {
@@ -54,7 +54,7 @@ public class GroqService(HttpClient _httpClient, IOptions<GroqSettings> options)
                 .GetString();
 
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var analysisResult = JsonSerializer.Deserialize<GetCVAnalysisResponse>(resultText!, options);
+            var analysisResult = JsonSerializer.Deserialize<CvAnalysisResult>(resultText!, options);
 
             return analysisResult is not null ? analysisResult : new Error(ErrorCodes.BadRequest, "Failed to parse Groq API response");
         }

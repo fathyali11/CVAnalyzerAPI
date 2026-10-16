@@ -47,6 +47,7 @@ public class CVsController(ICVService _cVService):ControllerBase
             analysis => Ok(analysis),
             error => error.Code switch
             {
+                ErrorCodes.NotFound => NotFound(new { error.Message }),
                 ErrorCodes.BadRequest => BadRequest(new { error.Message }),
                 ErrorCodes.UnAuthorized => Unauthorized(new { error.Message }),
                 _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
@@ -61,6 +62,7 @@ public class CVsController(ICVService _cVService):ControllerBase
             analysis => Ok(analysis),
             error => error.Code switch
             {
+                ErrorCodes.NotFound => NotFound(new { error.Message }),
                 ErrorCodes.BadRequest => BadRequest(new { error.Message }),
                 ErrorCodes.UnAuthorized => Unauthorized(new { error.Message }),
                 _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
@@ -73,6 +75,7 @@ public class CVsController(ICVService _cVService):ControllerBase
         return result.Code switch
         {
             ErrorCodes.None => NoContent(),
+            ErrorCodes.NotFound => NotFound(new { result.Message }),
             ErrorCodes.BadRequest => BadRequest(new { result.Message }),
             ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, new { result.Message }),
             _ => StatusCode(StatusCodes.Status500InternalServerError, new { result.Message })

@@ -1,5 +1,4 @@
-﻿
-using CVAnalyzerAPI.Consts;
+﻿using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.Data;
 using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
 using CVAnalyzerAPI.Models;
@@ -189,19 +188,11 @@ public class CVService(IFileService _fileService,
         
         try
         {
-            var ownsCv = await _context.CVs
-                .AnyAsync(cv => cv.Id == id && cv.UserId == currentUserId, cancellationToken);
-            if (!ownsCv)
-            {
-                _logger.LogWarning("Attempt to analyze non-existent or not-owned CV with ID {CvId} by user ID {UserId}.", id, currentUserId);
-                return new Error(ErrorCodes.NotFound, "CV not found");
-            }
-
             var cacheKey = CacheKeys.CvReAnalysis(id, currentUserId);
             var cvResponseFromDb = await _cache.GetOrCreateAsync(cacheKey,
                 async ct => await _context.CVs
                 .AsNoTracking()
-                .Where(x => x.Id == id)
+                .Where(x => x.Id == id && x.UserId == currentUserId)
                 .Select(x => new ReAnalysisSource(
                     x.Id,
                     x.ExtractedText,
@@ -212,7 +203,7 @@ public class CVService(IFileService _fileService,
                 cancellationToken: cancellationToken);
             if (cvResponseFromDb is null)
             {
-                _logger.LogWarning("Attempt to analyze non-existent CV with ID {CvId}.", id);
+                _logger.LogWarning("Attempt to analyze non-existent or not-owned CV with ID {CvId} by user ID {UserId}.", id, currentUserId);
                 return new Error(ErrorCodes.NotFound, "CV not found");
             }
 
@@ -340,22 +331,31 @@ public class CVService(IFileService _fileService,
 
     private async Task<string> ExtractTextFromPdfAsync(Stream pdfStream, CancellationToken cancellationToken)
     {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(FileConstraints.PdfExtractionTimeoutSeconds));
+        var token = timeoutCts.Token;
+
         return await Task.Run(() =>
         {
             var textBuilder = new StringBuilder();
 
             using (var document = PdfDocument.Open(pdfStream))
             {
+                var pagesProcessed = 0;
                 foreach (var page in document.GetPages())
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    token.ThrowIfCancellationRequested();
+
+                    if (pagesProcessed++ >= FileConstraints.MaxPdfPages)
+                        break;
+
                     var text = ContentOrderTextExtractor.GetText(page);
                     textBuilder.AppendLine(text);
                 }
             }
 
             return textBuilder.ToString().Trim();
-        }, cancellationToken);
+        }, token);
     }
 
     private async Task TryDeleteFileAsync(string? publicId, CancellationToken cancellationToken)

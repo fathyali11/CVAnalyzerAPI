@@ -4,6 +4,8 @@ namespace CVAnalyzerAPI.Consts;
 
 public class JwtSettings
 {
+    [Range(1, 30)]
+    public int MaxExpiredAccessTokenAgeInDays { get; set; } = 7 ;
     [Required, MinLength(32)]
     public string SecretKey { get; set; } = null!;
 

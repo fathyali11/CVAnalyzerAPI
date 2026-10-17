@@ -46,8 +46,8 @@ public class TokenService : ITokenService
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-            new Claim(JwtRegisteredClaimNames.Name, user.UserName!),
+            new Claim(ClaimTypes.Email, user.Email!),
+            new Claim(ClaimTypes.Name, user.UserName!),
             new Claim(ClaimTypes.Role, role),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N"))
         };
@@ -76,9 +76,14 @@ public class TokenService : ITokenService
         if (securityToken is not JwtSecurityToken jwtSecurityToken ||
             !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.Ordinal))
         {
+           
             return null;
         }
 
+         if(DateTime.UtcNow - jwtSecurityToken.ValidTo > TimeSpan.FromDays(_jwtSettings.MaxExpiredAccessTokenAgeInDays))
+        {
+            return null;
+        }
         return principal;
     }
 

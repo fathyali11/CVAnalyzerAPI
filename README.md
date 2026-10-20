@@ -80,7 +80,6 @@ Share tokens are generated automatically for each CV and returned as `shareToken
 | Allowed formats | `.pdf`, `.txt` |
 | Max PDF pages processed | 20 |
 | Max extracted characters sent to the LLM | 15,000 |
-| PDF extraction timeout | 30 seconds |
 
 ## Getting Started
 

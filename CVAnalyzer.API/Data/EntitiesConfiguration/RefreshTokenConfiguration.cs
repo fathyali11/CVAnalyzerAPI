@@ -10,6 +10,8 @@ internal class RefreshTokenConfiguration : IEntityTypeConfiguration<Models.Refre
         builder.Property(rt => rt.Token)
             .IsRequired()
             .HasMaxLength(500);
+
+        builder.HasIndex(rt => rt.Token).IsUnique();
         builder.HasOne(rt => rt.User)
             .WithMany(u => u.RefreshTokens)
             .HasForeignKey(rt => rt.UserId)

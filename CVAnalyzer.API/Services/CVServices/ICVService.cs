@@ -10,7 +10,7 @@ public interface ICVService
 
     Task<OneOf<List<GetCVResponse>, Error>> GetCVsAsync(CancellationToken cancellationToken);
     Task<OneOf<GetCVAnalysisResponse, Error>> GetCVAnalysisAsync(int cvId, CancellationToken cancellationToken);
-    Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id, CancellationToken cancellationToken);
+    Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id, string? jobDescription = null, CancellationToken cancellationToken = default);
     Task<Error> DeleteCvAsync(int id, CancellationToken cancellationToken = default);
     Task<OneOf<GetCVAnalysisResponse, Error>> GetByShareTokenAsync(Guid token, CancellationToken cancellationToken = default);
 }

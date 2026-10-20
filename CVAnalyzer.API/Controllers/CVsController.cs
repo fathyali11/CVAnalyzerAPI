@@ -3,6 +3,7 @@ using CVAnalyzerAPI.Extensions;
 using CVAnalyzerAPI.Services.CVServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace CVAnalyzerAPI.Controllers;
@@ -39,9 +40,13 @@ public class CVsController(ICVService _cVService):ControllerBase
     }
     [EnableRateLimiting("Analyze")]
     [HttpPost("{id}/reanalyze")]
-    public async Task<IActionResult> ReanalyzeCV([FromRoute] int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> ReanalyzeCV(
+        [FromRoute] int id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReanalyzeCVRequest? request,
+        CancellationToken cancellationToken)
     {
-        var result = await _cVService.AnalyzeExtractedCVAsync(id, cancellationToken);
+        var jobDescription = request is null ? null : request.JobDescription ?? string.Empty;
+        var result = await _cVService.AnalyzeExtractedCVAsync(id, jobDescription, cancellationToken);
         return result.Match<IActionResult>(
             analysis => Ok(analysis),
             error => error.ToEnvelopeResult());

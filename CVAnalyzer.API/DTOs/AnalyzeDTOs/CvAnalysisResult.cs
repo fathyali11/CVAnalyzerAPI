@@ -8,4 +8,5 @@ public record CvAnalysisResult(
     int? JobMatchPercentage,
     int TechnicalAlignment,
     int SoftSkillsFit,
-    int DomainExperience);
+    int DomainExperience,
+    string? JobDescription);

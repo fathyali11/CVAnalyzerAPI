@@ -352,7 +352,7 @@ public class CVServiceTests : IDisposable
         var cv = await SeedCvAsync(UserId, "resume.txt");
         await SeedAnalysisAsync(cv, score: 50);
         var latest = await SeedAnalysisAsync(cv, score: 88, jobMatchPercentage: 91,
-            technicalAlignment: 84, softSkillsFit: 79, domainExperience: 73);
+            technicalAlignment: 84, softSkillsFit: 79, domainExperience: 73, jobDescription: "Backend JD");
 
         var result = await _sut.GetCVAnalysisAsync(cv.Id, CancellationToken.None);
 
@@ -365,6 +365,7 @@ public class CVServiceTests : IDisposable
         response.TechnicalAlignment.ShouldBe(84);
         response.SoftSkillsFit.ShouldBe(79);
         response.DomainExperience.ShouldBe(73);
+        response.JobDescription.ShouldBe("Backend JD");
         response.Strengths.ShouldHaveSingleItem().Heading.ShouldBe("Strong C#");
         response.Weaknesses.ShouldHaveSingleItem().ShouldBe("Limited cloud experience");
         response.Suggestions.ShouldHaveSingleItem().Heading.ShouldBe("Add metrics");
@@ -392,7 +393,7 @@ public class CVServiceTests : IDisposable
     {
         _authService.GetCurrentUserIdAsync(Arg.Any<CancellationToken>()).Returns((string?)null);
 
-        var result = await _sut.AnalyzeExtractedCVAsync(1, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(1, null, CancellationToken.None);
 
         ShouldBeError(result, ErrorCodes.UnAuthorized, "User must be authenticated to analyze CV");
     }
@@ -402,7 +403,7 @@ public class CVServiceTests : IDisposable
     {
         await SeedUserAsync();
 
-        var result = await _sut.AnalyzeExtractedCVAsync(999, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(999, null, CancellationToken.None);
 
         ShouldBeError(result, ErrorCodes.NotFound, "CV not found");
         await _analyzeService.DidNotReceiveWithAnyArgs().AnalyzeCVAsync(default!, default, default);
@@ -415,7 +416,7 @@ public class CVServiceTests : IDisposable
         await SeedUserAsync(OtherUserId, "jane");
         var otherCv = await SeedCvAsync(OtherUserId, "other.txt");
 
-        var result = await _sut.AnalyzeExtractedCVAsync(otherCv.Id, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(otherCv.Id, null, CancellationToken.None);
 
         ShouldBeError(result, ErrorCodes.NotFound, "CV not found");
     }
@@ -426,7 +427,7 @@ public class CVServiceTests : IDisposable
         await SeedUserAsync();
         var cv = await SeedCvAsync(UserId, extractedText: "");
 
-        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, null, CancellationToken.None);
 
         ShouldBeError(result, ErrorCodes.BadRequest, "No extracted text is available for this CV.");
         await _analyzeService.DidNotReceiveWithAnyArgs().AnalyzeCVAsync(default!, default, default);
@@ -442,7 +443,7 @@ public class CVServiceTests : IDisposable
             .Returns(OneOf<CvAnalysisResult, Error>.FromT1(
                 new Error(ErrorCodes.BadRequest, "The AI provider rejected the request")));
 
-        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, null, CancellationToken.None);
 
         ShouldBeError(result, ErrorCodes.BadRequest, "The AI provider rejected the request");
         (await _context.Analyses.CountAsync()).ShouldBe(0);
@@ -456,7 +457,7 @@ public class CVServiceTests : IDisposable
         _analyzeService.When(a => a.AnalyzeCVAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()))
             .Do(_ => throw new InvalidOperationException("Provider down"));
 
-        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, null, CancellationToken.None);
 
         ShouldBeError(result, ErrorCodes.InternalServerError, InternalServerErrorMessage);
         (await _context.Analyses.CountAsync()).ShouldBe(0);
@@ -468,7 +469,7 @@ public class CVServiceTests : IDisposable
         await SeedUserAsync();
         var cv = await SeedCvAsync(UserId, extractedText: new string('a', FileConstraints.MaxCvTextLength + 1_000));
 
-        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, null, CancellationToken.None);
 
         ShouldBeSuccess(result);
         await _analyzeService.Received(1).AnalyzeCVAsync(
@@ -487,7 +488,7 @@ public class CVServiceTests : IDisposable
         _analyzeService.AnalyzeCVAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(SuccessAnalysis(score: rawScore));
 
-        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, null, CancellationToken.None);
 
         ShouldBeSuccess(result).Score.ShouldBe(expected);
         var persisted = await _context.Analyses.AsNoTracking().SingleAsync();
@@ -501,7 +502,7 @@ public class CVServiceTests : IDisposable
         var cv = await SeedCvAsync(UserId, "resume.txt", extractedText: "John Doe\nC#");
         var priorAnalysis = await SeedAnalysisAsync(cv, score: 60, jobDescription: "Prior JD");
 
-        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, CancellationToken.None);
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, null, CancellationToken.None);
 
         var response = ShouldBeSuccess(result);
         response.Id.ShouldBeGreaterThan(priorAnalysis.Id);
@@ -511,6 +512,7 @@ public class CVServiceTests : IDisposable
         response.Strengths.ShouldHaveSingleItem().Heading.ShouldBe("Strong C#");
         response.Weaknesses.ShouldHaveSingleItem().ShouldBe("Limited cloud experience");
         response.Suggestions.ShouldHaveSingleItem().Heading.ShouldBe("Add metrics");
+        response.JobDescription.ShouldBe("Prior JD");
 
         await _analyzeService.Received(1).AnalyzeCVAsync("John Doe\nC#", "Prior JD", Arg.Any<CancellationToken>());
 
@@ -520,6 +522,40 @@ public class CVServiceTests : IDisposable
         newAnalysis.Score.ShouldBe(85);
         newAnalysis.JobDescription.ShouldBe("Prior JD");
         (await _context.Analyses.CountAsync()).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task AnalyzeExtractedCVAsync_ProvidedJobDescription_OverridesStoredJobDescription()
+    {
+        await SeedUserAsync(UserId, "john");
+        var cv = await SeedCvAsync(UserId, "resume.txt", extractedText: "John Doe\nC#");
+        await SeedAnalysisAsync(cv, score: 60, jobDescription: "Stored JD");
+
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, "  New JD  ", CancellationToken.None);
+
+        var response = ShouldBeSuccess(result);
+        response.JobDescription.ShouldBe("New JD");
+        await _analyzeService.Received(1).AnalyzeCVAsync("John Doe\nC#", "New JD", Arg.Any<CancellationToken>());
+
+        var newAnalysis = await _context.Analyses.AsNoTracking().OrderByDescending(a => a.Id).FirstAsync();
+        newAnalysis.JobDescription.ShouldBe("New JD");
+    }
+
+    [Fact]
+    public async Task AnalyzeExtractedCVAsync_BlankJobDescription_ClearsStoredJobDescription()
+    {
+        await SeedUserAsync(UserId, "john");
+        var cv = await SeedCvAsync(UserId, "resume.txt", extractedText: "John Doe\nC#");
+        await SeedAnalysisAsync(cv, score: 60, jobDescription: "Stored JD");
+
+        var result = await _sut.AnalyzeExtractedCVAsync(cv.Id, "   ", CancellationToken.None);
+
+        var response = ShouldBeSuccess(result);
+        response.JobDescription.ShouldBeNull();
+        await _analyzeService.Received(1).AnalyzeCVAsync("John Doe\nC#", null, Arg.Any<CancellationToken>());
+
+        var newAnalysis = await _context.Analyses.AsNoTracking().OrderByDescending(a => a.Id).FirstAsync();
+        newAnalysis.JobDescription.ShouldBeNull();
     }
 
     [Fact]
@@ -537,7 +573,7 @@ public class CVServiceTests : IDisposable
         _analyzeService.AnalyzeCVAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(SuccessAnalysis(score: 92));
 
-        var reanalysis = ShouldBeSuccess(await _sut.AnalyzeExtractedCVAsync(cv.Id, CancellationToken.None));
+        var reanalysis = ShouldBeSuccess(await _sut.AnalyzeExtractedCVAsync(cv.Id, null, CancellationToken.None));
         reanalysis.Score.ShouldBe(92);
 
         ShouldBeSuccess(await _sut.GetCVAnalysisAsync(cv.Id, CancellationToken.None)).Id.ShouldBe(reanalysis.Id);
@@ -556,7 +592,7 @@ public class CVServiceTests : IDisposable
             .Returns<OneOf<CvAnalysisResult, Error>>(_ => throw new OperationCanceledException());
 
         await Should.ThrowAsync<OperationCanceledException>(() =>
-            _sut.AnalyzeExtractedCVAsync(cv.Id, cts.Token));
+            _sut.AnalyzeExtractedCVAsync(cv.Id, null, cts.Token));
     }
 
     [Fact]
@@ -721,7 +757,8 @@ public class CVServiceTests : IDisposable
         JobMatchPercentage: 90,
         TechnicalAlignment: 88,
         SoftSkillsFit: 80,
-        DomainExperience: 75);
+        DomainExperience: 75,
+        JobDescription: null);
 
     private async Task<ApplicationUser> SeedUserAsync(string id = UserId, string userName = "john")
     {

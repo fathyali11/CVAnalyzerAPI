@@ -162,7 +162,8 @@ public class CVService(IFileService _fileService,
                             x.JobMatchPercentage,
                             x.TechnicalAlignment,
                             x.SoftSkillsFit,
-                            x.DomainExperience))
+                            x.DomainExperience,
+                            x.JobDescription))
                         .FirstOrDefaultAsync(ct);
 
                 return a is null ? null : ToResponse(a);
@@ -177,7 +178,7 @@ public class CVService(IFileService _fileService,
         return analysis;
     }
     
-    public async Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id,CancellationToken cancellationToken)
+    public async Task<OneOf<GetCVAnalysisResponse, Error>> AnalyzeExtractedCVAsync(int id, string? jobDescription = null, CancellationToken cancellationToken = default)
     {
         var currentUserId = await _authService.GetCurrentUserIdAsync(cancellationToken);
         if (currentUserId is null)
@@ -217,14 +218,22 @@ public class CVService(IFileService _fileService,
                 ? cvResponseFromDb.ExtractedText[..FileConstraints.MaxCvTextLength]
                 : cvResponseFromDb.ExtractedText;
 
-            var analysisResultOrError = await _analyzeService.AnalyzeCVAsync(cvText, cvResponseFromDb.JobDescription, cancellationToken);
+            // A null value means the caller did not provide a job description, so the
+            // previous one is reused. An empty value explicitly clears it.
+            var effectiveJobDescription = jobDescription is null
+                ? cvResponseFromDb.PreviousJobDescription
+                : string.IsNullOrWhiteSpace(jobDescription)
+                    ? null
+                    : jobDescription.Trim();
+
+            var analysisResultOrError = await _analyzeService.AnalyzeCVAsync(cvText, effectiveJobDescription, cancellationToken);
             if (analysisResultOrError.IsT1)
             {
                 _logger.LogError("Error analyzing extracted CV with ID {CvId}: {Error}", id, analysisResultOrError.AsT1.Message);
                 return analysisResultOrError.AsT1;
             }
             var analysisResult = analysisResultOrError.AsT0;
-            var analysisRecord = BuildAnalysis(analysisResult, cvResponseFromDb.JobDescription);
+            var analysisRecord = BuildAnalysis(analysisResult, effectiveJobDescription);
             analysisRecord.CVId = cvResponseFromDb.CvId;
             await _context.Analyses.AddAsync(analysisRecord, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
@@ -236,7 +245,7 @@ public class CVService(IFileService _fileService,
             _logger.LogInformation("Successfully analyzed extracted CV with ID {CvId}. Score: {Score}, Job Match: {JobMatchPercentage}",
                 id, analysisResult.Score, analysisResult.JobMatchPercentage);
 
-            return ToResponse(analysisResult, analysisRecord.Id, cvResponseFromDb.ShareToken, cvResponseFromDb.UserName);
+            return ToResponse(analysisResult, analysisRecord.Id, cvResponseFromDb.ShareToken, cvResponseFromDb.UserName, effectiveJobDescription);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -298,7 +307,8 @@ public class CVService(IFileService _fileService,
                            x.JobMatchPercentage,
                            x.TechnicalAlignment,
                            x.SoftSkillsFit,
-                           x.DomainExperience))
+                           x.DomainExperience,
+                           x.JobDescription))
                        .FirstOrDefaultAsync(ct);
 
                return a is null ? null : ToResponse(a);
@@ -398,11 +408,11 @@ public class CVService(IFileService _fileService,
     private sealed record ReAnalysisSource(
         int CvId,
         string ExtractedText,
-        string? JobDescription,
+        string? PreviousJobDescription,
         string? UserName,
         Guid ShareToken);
 
-    private static GetCVAnalysisResponse ToResponse(CvAnalysisResult r, int id, Guid shareToken, string? userName) => new(
+    private static GetCVAnalysisResponse ToResponse(CvAnalysisResult r, int id, Guid shareToken, string? userName, string? jobDescription) => new(
         id,
         Math.Clamp(r.Score, 1, 100),
         [.. (r.Strengths ?? [])],
@@ -413,7 +423,8 @@ public class CVService(IFileService _fileService,
         r.JobMatchPercentage,
         r.TechnicalAlignment,
         r.SoftSkillsFit,
-        r.DomainExperience);
+        r.DomainExperience,
+        jobDescription ?? r.JobDescription);
 
     private static GetCVAnalysisResponse ToResponse(AnalysisData a) => new(
         a.Id,
@@ -435,5 +446,6 @@ public class CVService(IFileService _fileService,
         a.JobMatchPercentage,
         a.TechnicalAlignment,
         a.SoftSkillsFit,
-        a.DomainExperience);
+        a.DomainExperience,
+        a.JobDescription);
 }

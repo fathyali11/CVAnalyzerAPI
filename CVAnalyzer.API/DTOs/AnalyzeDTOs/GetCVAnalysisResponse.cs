@@ -11,7 +11,8 @@ public record GetCVAnalysisResponse(
     int? JobMatchPercentage,
     int TechnicalAlignment,
     int SoftSkillsFit,
-    int DomainExperience);
+    int DomainExperience,
+    string? JobDescription);
 
 public class StrengthsDto
 {

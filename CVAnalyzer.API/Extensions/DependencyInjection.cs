@@ -265,6 +265,7 @@ public static class DependencyInjection
     {
         return HttpPolicyExtensions
             .HandleTransientHttpError()
+            .Or<TaskCanceledException>()
             .WaitAndRetryAsync(
                 retryCount: 3,
                 sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),

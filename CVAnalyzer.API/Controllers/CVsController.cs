@@ -1,5 +1,5 @@
-﻿using CVAnalyzerAPI.Consts;
-using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
+﻿using CVAnalyzerAPI.DTOs.AnalyzeDTOs;
+using CVAnalyzerAPI.Extensions;
 using CVAnalyzerAPI.Services.CVServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,12 +19,7 @@ public class CVsController(ICVService _cVService):ControllerBase
         var result = await _cVService.UploadAndAnalysisCVAsync(request, cancellationToken);
         return result.Match<IActionResult>(
             analysis => Ok(analysis),
-            error => error.Code switch
-            {
-                ErrorCodes.BadRequest => BadRequest(new { error.Message }),
-                ErrorCodes.UnAuthorized => Unauthorized(new { error.Message }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
-            });
+            error => error.ToEnvelopeResult());
     }
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
@@ -32,12 +27,7 @@ public class CVsController(ICVService _cVService):ControllerBase
         var result = await _cVService.GetCVsAsync(cancellationToken);
         return result.Match<IActionResult>(
             cvs => Ok(cvs),
-            error => error.Code switch
-            {
-                ErrorCodes.BadRequest => BadRequest(new { error.Message }),
-                ErrorCodes.UnAuthorized => Unauthorized(new { error.Message }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
-            });
+            error => error.ToEnvelopeResult());
     }
     [HttpGet("{id}/analysis")]
     public async Task<IActionResult> GetCVAnalysis([FromRoute] int id, CancellationToken cancellationToken)
@@ -45,13 +35,7 @@ public class CVsController(ICVService _cVService):ControllerBase
         var result = await _cVService.GetCVAnalysisAsync(id, cancellationToken);
         return result.Match<IActionResult>(
             analysis => Ok(analysis),
-            error => error.Code switch
-            {
-                ErrorCodes.NotFound => NotFound(new { error.Message }),
-                ErrorCodes.BadRequest => BadRequest(new { error.Message }),
-                ErrorCodes.UnAuthorized => Unauthorized(new { error.Message }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
-            });
+            error => error.ToEnvelopeResult());
     }
     [EnableRateLimiting("Analyze")]
     [HttpPost("{id}/reanalyze")]
@@ -60,26 +44,13 @@ public class CVsController(ICVService _cVService):ControllerBase
         var result = await _cVService.AnalyzeExtractedCVAsync(id, cancellationToken);
         return result.Match<IActionResult>(
             analysis => Ok(analysis),
-            error => error.Code switch
-            {
-                ErrorCodes.NotFound => NotFound(new { error.Message }),
-                ErrorCodes.BadRequest => BadRequest(new { error.Message }),
-                ErrorCodes.UnAuthorized => Unauthorized(new { error.Message }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
-            });
+            error => error.ToEnvelopeResult());
     }
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCV([FromRoute] int id, CancellationToken cancellationToken)
     {
         var result = await _cVService.DeleteCvAsync(id, cancellationToken);
-        return result.Code switch
-        {
-            ErrorCodes.None => NoContent(),
-            ErrorCodes.NotFound => NotFound(new { result.Message }),
-            ErrorCodes.BadRequest => BadRequest(new { result.Message }),
-            ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, new { result.Message }),
-            _ => StatusCode(StatusCodes.Status500InternalServerError, new { result.Message })
-        };
+        return result.ToEnvelopeResult();
     }
 
     [EnableRateLimiting("public-link")]
@@ -91,11 +62,7 @@ public class CVsController(ICVService _cVService):ControllerBase
         var result = await _cVService.GetByShareTokenAsync(token, cancellationToken);
         return result.Match<IActionResult>(
             analysis => Ok(analysis),
-            error => error.Code switch
-            {
-                ErrorCodes.NotFound => NotFound(new { error.Message }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError, new { error.Message })
-            });
+            error => error.ToEnvelopeResult());
     }
 
 }

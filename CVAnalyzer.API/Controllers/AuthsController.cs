@@ -1,6 +1,6 @@
 
-using CVAnalyzerAPI.Consts;
 using CVAnalyzerAPI.DTOs.AuthsDTOs;
+using CVAnalyzerAPI.Extensions;
 using CVAnalyzerAPI.Services.AuthServices;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -22,12 +22,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
                 PrepareRefreshTokenCookie(authResponse.RefreshToken, authResponse.RefreshTokenExpiration);
                 return Ok(authResponse);
             },
-            error => error.Code switch
-            {
-                ErrorCodes.BadRequest => BadRequest(error.Message),
-                ErrorCodes.Conflict => Conflict(error.Message),
-                _ => StatusCode(500, "An unexpected error occurred")
-            }
+            error => error.ToEnvelopeResult()
 
         );
     }
@@ -35,7 +30,6 @@ public class AuthsController(IAuthService _authService) : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken = default)
     {
-
         var result = await _authService.LoginAsync(request, cancellationToken);
         return result.Match<IActionResult>(
             authResponse =>
@@ -43,13 +37,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
                 PrepareRefreshTokenCookie(authResponse.RefreshToken, authResponse.RefreshTokenExpiration);
                 return Ok(authResponse);
             },
-            error => error.Code switch
-            {
-                ErrorCodes.BadRequest => BadRequest(error.Message),
-                ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, error.Message),
-                ErrorCodes.NotFound => NotFound(error.Message),
-                _ => StatusCode(500, "An unexpected error occurred")
-            }
+            error => error.ToEnvelopeResult()
         );
     }
     [HttpPost("refresh-token")]
@@ -63,13 +51,7 @@ public class AuthsController(IAuthService _authService) : ControllerBase
                 PrepareRefreshTokenCookie(authResponse.RefreshToken, authResponse.RefreshTokenExpiration);
                 return Ok(authResponse);
             },
-            error => error.Code switch
-            {
-                ErrorCodes.BadRequest => BadRequest(error.Message),
-                ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, error.Message),
-                ErrorCodes.NotFound => NotFound(error.Message),
-                _ => StatusCode(500, "An unexpected error occurred")
-            }
+            error => error.ToEnvelopeResult()
         );
     }
 
@@ -78,25 +60,14 @@ public class AuthsController(IAuthService _authService) : ControllerBase
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.ForgotPasswordAsync(request, cancellationToken);
-        return result.Code switch
-        {
-            ErrorCodes.None => Ok(new { Message = result.Message }),
-            ErrorCodes.BadRequest => BadRequest(result.Message),
-            _ => StatusCode(500, "An unexpected error occurred")
-        };
+        return result.ToEnvelopeResult();
     }
 
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.ResetPasswordAsync(request, cancellationToken);
-        return result.Code switch
-        {
-            ErrorCodes.None => Ok(new { Message = result.Message }),
-            ErrorCodes.UnAuthorized => StatusCode(StatusCodes.Status401Unauthorized, result.Message),
-            ErrorCodes.BadRequest => BadRequest(result.Message),
-            _ => StatusCode(500, "An unexpected error occurred")
-        };
+        return result.ToEnvelopeResult();
     }
 
     private void PrepareRefreshTokenCookie(string refreshToken, DateTime expiresAt)

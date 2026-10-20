@@ -5,10 +5,14 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
 
 env:
   DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
+  SOLUTION: CVAnalyzerAPI.slnx
+  API_PROJECT: CVAnalyzer.API/CVAnalyzerAPI.csproj
+  TEST_PROJECT: CVAnalyzerAPI.Tests/CVAnalyzerAPI.Tests.csproj
 
 jobs:
   build-and-test:
@@ -28,21 +32,39 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ${{ env.SOLUTION }}
 
       - name: Build
-        run: dotnet build --no-restore -c ${{ env.CONFIGURATION }}
+        run: dotnet build ${{ env.SOLUTION }} --no-restore -c ${{ env.CONFIGURATION }}
 
+      # Runs every test in CVAnalyzerAPI.Tests and collects coverage (coverlet.collector).
       - name: Test
-        run: dotnet test --no-build -c ${{ env.CONFIGURATION }} --verbosity normal
+        run: |
+          dotnet test ${{ env.TEST_PROJECT }} \
+            --no-build \
+            -c ${{ env.CONFIGURATION }} \
+            --logger "trx;LogFileName=test-results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            --verbosity normal
+
+      # Keep test results and coverage even when the tests fail.
+      - name: Upload test results & coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Publish
-        run: dotnet publish CVAnalyzer.API/CVAnalyzerAPI.csproj --no-restore -c ${{ env.CONFIGURATION }} -o ./publish
+        run: dotnet publish ${{ env.API_PROJECT }} --no-restore -c ${{ env.CONFIGURATION }} -o ./publish
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -52,11 +74,29 @@ jobs:
           retention-days: 7
 
   deploy:
-    name: Deploy to Server
+    name: Deploy to MonsterASP.NET
     runs-on: ubuntu-latest
     needs: build-and-test
     # Deploy only on push to master, never on pull requests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    # Never run two deployments at the same time.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    env:
+      # MonsterASP.NET -> Websites -> <site> -> Deploy -> FTP / SFTP access
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      # ftps (recommended), ftp or sftp
+      FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+      # 21 for FTP/FTPS; use the SFTP port shown in the control panel when using sftp.
+      FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
+      # Website document root. The FTP login normally starts one level above it.
+      FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR || '/wwwroot' }}
+      # lftp reads the password from here, so it never appears in the command line.
+      LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
     steps:
       - name: Download artifact
@@ -65,31 +105,120 @@ jobs:
           name: cvanalyzer-api
           path: ./publish
 
-      - name: Deploy to server via SSH
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/var/www/cvanalyzer' }}
-          SERVICE_NAME: ${{ secrets.SERVICE_NAME || 'cvanalyzer-api' }}
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      # Fail early if the publish output is incomplete, instead of deploying a broken site.
+      - name: Verify publish output
+        run: |
+          set -euo pipefail
+          for file in CVAnalyzerAPI.dll web.config Templates/ResetPassword.html; do
+            if [ ! -f "./publish/$file" ]; then
+              echo "::error::Missing required publish file: $file"
+              exit 1
+            fi
+          done
+
+      - name: Install lftp
+        run: |
+          if ! command -v lftp >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y lftp
+          fi
+
+      - name: Configure FTP client
         run: |
           set -euo pipefail
 
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          : "${FTP_SERVER:?FTP_SERVER secret is required}"
+          : "${FTP_USERNAME:?FTP_USERNAME secret is required}"
+          : "${FTP_PASSWORD:?FTP_PASSWORD secret is required}"
 
-          SSH_CMD="ssh -p $DEPLOY_PORT -i $HOME/.ssh/id_deploy"
+          # Accept a bare host even if the secret includes a scheme or trailing slash.
+          FTP_SERVER="${FTP_SERVER#ftp://}"
+          FTP_SERVER="${FTP_SERVER#ftps://}"
+          FTP_SERVER="${FTP_SERVER#sftp://}"
+          FTP_SERVER="${FTP_SERVER%/}"
 
-          # Ensure the target directory exists on the server
-          $SSH_CMD "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/current'"
+          # lftp appends the local folder name to targets ending in "/", so strip it.
+          FTP_SERVER_DIR="${FTP_SERVER_DIR%/}"
+          [ -n "$FTP_SERVER_DIR" ] || FTP_SERVER_DIR="/"
+          echo "FTP_SERVER_DIR=$FTP_SERVER_DIR" >> "$GITHUB_ENV"
 
-          # Sync the published app to the server (removes stale files)
-          rsync -az --delete \
-            -e "ssh -p $DEPLOY_PORT -i $HOME/.ssh/id_deploy" \
-            ./publish/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/current/"
+          case "$FTP_PROTOCOL" in
+            ftp)
+              FTP_URL="ftp://$FTP_SERVER:$FTP_PORT"
+              SETTINGS="set ftp:ssl-allow no"
+              ;;
+            ftps)
+              FTP_URL="ftp://$FTP_SERVER:$FTP_PORT"
+              SETTINGS=$(printf '%s\n' \
+                "set ftp:ssl-force true" \
+                "set ftp:ssl-protect-data true" \
+                "set ssl:verify-certificate no")
+              ;;
+            sftp)
+              FTP_URL="sftp://$FTP_SERVER:$FTP_PORT"
+              SETTINGS="set sftp:auto-confirm yes"
+              ;;
+            *)
+              echo "::error::FTP_PROTOCOL must be ftp, ftps or sftp (got '$FTP_PROTOCOL')"
+              exit 1
+              ;;
+          esac
 
-          # Restart the application service
-          $SSH_CMD "$DEPLOY_USER@$DEPLOY_HOST" "sudo systemctl restart '$SERVICE_NAME'"
+          echo "FTP_URL=$FTP_URL" >> "$GITHUB_ENV"
+
+          {
+            echo "set net:max-retries 3"
+            echo "set net:timeout 30"
+            echo "$SETTINGS"
+          } > "$HOME/.lftprc"
+
+      # IIS keeps the application's files locked while it runs. While app_offline.htm
+      # exists in wwwroot, ASP.NET stops the app and serves this page instead, which
+      # releases the locks so the new files can overwrite the old ones.
+      - name: Put site offline
+        run: |
+          set -euo pipefail
+
+          cat > app_offline.htm <<'HTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>Deployment in progress</title></head>
+          <body style="font-family: sans-serif; text-align: center; padding: 3rem;">
+            <h1>We are updating the service</h1>
+            <p>Please try again in a minute.</p>
+          </body>
+          </html>
+          HTML
+
+          lftp --env-password -u "$FTP_USERNAME" "$FTP_URL" \
+            -e "put -O '$FTP_SERVER_DIR' ./app_offline.htm; bye"
+
+          # Give IIS a moment to unload the application and release locked files.
+          sleep 5
+
+      - name: Deploy files
+        run: |
+          set -euo pipefail
+
+          lftp --env-password -u "$FTP_USERNAME" "$FTP_URL" -e "
+            set cmd:fail-exit true;
+            mirror -R --delete --parallel=4 --no-perms --verbose \
+              --exclude-glob app_offline.htm \
+              --exclude-glob appsettings.Production.json \
+              ./publish '$FTP_SERVER_DIR';
+            bye"
+
+      # Always remove app_offline.htm, even if the upload failed, so the site is
+      # never left offline. MonsterASP.NET recommends never leaving the app stopped.
+      - name: Put site online
+        if: always()
+        run: |
+          set -euo pipefail
+
+          if [ -z "${FTP_URL:-}" ]; then
+            echo "FTP client was not configured; nothing to clean up."
+            exit 0
+          fi
+
+          lftp --env-password -u "$FTP_USERNAME" "$FTP_URL" \
+            -e "rm -f '$FTP_SERVER_DIR/app_offline.htm'; bye"
